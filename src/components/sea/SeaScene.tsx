@@ -32,6 +32,7 @@ import { Palms } from "./Palms";
 import { Reef, REEFS } from "./Reef";
 import { ReefFish } from "./ReefFish";
 import { BUNGALOWS, Resort, TORCHES } from "./Resort";
+import { GUEST_FOCUS, Guests } from "./Guests";
 import { Shadows } from "./Shadows";
 
 interface Props {
@@ -70,6 +71,9 @@ const refractScale = (cssWidth: number) => RT_OVERRIDE || (cssWidth < 800 ? 0.5 
 const SIM_DEBUG = !!captureParam("simdebug");
 // ?focus=<산호 군락 id> — 그 군락을 가까이서 본다 (점검용)
 const FOCUS_REEF = REEFS.find((r) => r.id === captureParam("focus")) ?? null;
+// ?focus=guests — 손님 커플을 따라가는 근접 뷰 (점검용)
+const FOCUS_GUESTS = captureParam("focus") === "guests";
+const GUESTS_OFF = captureParam("guests") === "0"; // ?guests=0 — 손님 끄기 (성능 A/B 점검용)
 const CALM_PARAM = Number(captureParam("calm")) || 0; // ?calm= 감쇠 덮어쓰기 (점검용, 0 이면 시뮬 기본값)
 // 포인터가 수면을 파는 세기 (시뮬 높이 단위 — uAmp 배율 전)
 const PRESS = { down: -0.3, downR: 0.9, drag: -0.045, dragR: 0.85, holdDepth: -0.22, holdR: 0.9, hover: -0.025, hoverR: 0.5, spacing: 0.15 };
@@ -447,6 +451,13 @@ function Scene({ creatures, flavour, onReady }: Props) {
       tmp.v.set(FOCUS_REEF.x + CAM_BACK.x * Math.cos(CAM_EL) * fr, fy + Math.sin(CAM_EL) * fr, FOCUS_REEF.z + CAM_BACK.z * Math.cos(CAM_EL) * fr);
       camera.position.copy(tmp.v);
       camera.lookAt(FOCUS_REEF.x, fy, FOCUS_REEF.z);
+    } else if (FOCUS_GUESTS) {
+      // 야자수 잎은 Palms 가 숨긴다 (점검용)
+      const fr = 6.0, fel = THREE.MathUtils.degToRad(50);
+      const f = GUEST_FOCUS;
+      tmp.v.set(f.x + CAM_BACK.x * Math.cos(fel) * fr, f.y + Math.sin(fel) * fr, f.z + CAM_BACK.z * Math.cos(fel) * fr);
+      camera.position.lerp(tmp.v, Math.min(1, dt * 4));
+      camera.lookAt(f.x, f.y, f.z);
     } else {
       camera.position.lerp(tmp.v, Math.min(1, dt * 3));
       camera.lookAt(tx, aspect < 1 ? -3.8 : CAM.lookY, tz); // 세로 화면은 아래 패널에 안 가리게 수조를 위로
@@ -620,6 +631,7 @@ function Scene({ creatures, flavour, onReady }: Props) {
       <Palms bottom={BOTTOM} />
       <Reef bottom={BOTTOM} />
       <Resort bottom={BOTTOM} />
+      {!GUESTS_OFF && <Guests bottom={BOTTOM} onSplash={splash} />}
       <Shadows top={TOP} groundY={BOTTOM - STRATA_H} halfX={W / 2} halfZ={D / 2} corner={CORNER} />
 
       {/* 빛줄기 (6장 → 1 메시) */}

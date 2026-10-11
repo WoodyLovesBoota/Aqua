@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { captureParam } from "@/components/creature/debugProbe";
 import { floorHeight } from "./lagoonHeight";
 import { PALMS } from "./resortLayout";
 
@@ -12,6 +13,8 @@ import { PALMS } from "./resortLayout";
  * 줄기: 마디가 있는 테이퍼 튜브. 잎: 축(튜브) + 잎몸 24쌍(각각 5정점 4삼각형).
  */
 export { PALMS };
+// ?focus=guests 근접 뷰(점검용)에선 잎을 숨긴다 — 관 아래를 걷는 손님이 가려진다
+const HIDE_FRONDS = captureParam("focus") === "guests";
 
 /** 정점 색은 선형 공간이라, 눈으로 고른 sRGB 값을 변환해 넣는다 */
 const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
@@ -216,8 +219,8 @@ export function Palms({ bottom }: { bottom: number }) {
   return (
     <>
       <instancedMesh ref={trunks} args={[trunkGeo, trunkMat, PALMS.length]} />
-      <instancedMesh ref={fronds} args={[frondGeo, frondMat, PALMS.length * FRONDS]} frustumCulled={false} />
-      <instancedMesh ref={dead} args={[frondGeo, deadMat, PALMS.length * DEAD]} frustumCulled={false} />
+      <instancedMesh ref={fronds} args={[frondGeo, frondMat, PALMS.length * FRONDS]} frustumCulled={false} visible={!HIDE_FRONDS} />
+      <instancedMesh ref={dead} args={[frondGeo, deadMat, PALMS.length * DEAD]} frustumCulled={false} visible={!HIDE_FRONDS} />
       <instancedMesh ref={nuts} args={[undefined, nutMat, PALMS.length * 4]}>
         <sphereGeometry args={[1, 7, 6]} />
       </instancedMesh>
