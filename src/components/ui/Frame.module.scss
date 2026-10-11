@@ -1,0 +1,78 @@
+.frame {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 40%, #f1eee8 0%, var(--paper) 55%, var(--paper-deep) 100%);
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+
+  &.ready {
+    opacity: 1;
+  }
+}
+
+.topbar {
+  position: absolute;
+  top: 16px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+
+  a,
+  button {
+    pointer-events: auto;
+  }
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #2fa36b;
+  }
+}
+
+.loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--ink-faint);
+  font-size: 15px;
+}
