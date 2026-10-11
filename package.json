@@ -20,6 +20,7 @@
     "check:soak": "node scripts/visual-check/soak.mjs",
     "check:navsim": "node --experimental-strip-types --no-warnings --import ./scripts/ts-alias.mjs scripts/visual-check/navsim.mts",
     "check:guestnav": "node --experimental-strip-types --no-warnings --import ./scripts/ts-alias.mjs scripts/visual-check/guestnav.mts",
+    "check:plane": "node --experimental-strip-types --no-warnings --import ./scripts/ts-alias.mjs scripts/visual-check/planecheck.mts",
     "check:all": "node scripts/visual-check/all.mjs"
   },
   "dependencies": {

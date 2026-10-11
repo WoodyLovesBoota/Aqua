@@ -34,6 +34,7 @@ import { ReefFish } from "./ReefFish";
 import { BUNGALOWS, Resort, TORCHES } from "./Resort";
 import { GUEST_FOCUS, Guests } from "./Guests";
 import { Shadows } from "./Shadows";
+import { PLANE_FOCUS, PLANE_OFF, Seaplane } from "./Seaplane";
 
 interface Props {
   creatures: Record<Species, CreatureConfig>;
@@ -74,6 +75,9 @@ const FOCUS_REEF = REEFS.find((r) => r.id === captureParam("focus")) ?? null;
 // ?focus=guests — 손님 커플을 따라가는 근접 뷰 (점검용)
 const FOCUS_GUESTS = captureParam("focus") === "guests";
 const GUESTS_OFF = captureParam("guests") === "0"; // ?guests=0 — 손님 끄기 (성능 A/B 점검용)
+// ?focus=plane — 수상기를 따라가는 근접 뷰 (점검용). &view=top|side|front|back|q 로 방향
+const FOCUS_PLANE = captureParam("focus") === "plane";
+const PLANE_VIEW = captureParam("view") ?? "q";
 const CALM_PARAM = Number(captureParam("calm")) || 0; // ?calm= 감쇠 덮어쓰기 (점검용, 0 이면 시뮬 기본값)
 // 포인터가 수면을 파는 세기 (시뮬 높이 단위 — uAmp 배율 전)
 const PRESS = { down: -0.3, downR: 0.9, drag: -0.045, dragR: 0.85, holdDepth: -0.22, holdR: 0.9, hover: -0.025, hoverR: 0.5, spacing: 0.15 };
@@ -299,6 +303,8 @@ function Scene({ creatures, flavour, onReady }: Props) {
 
   /** 무언가 수면에 떨어지거나 뚫고 나올 때: strength 1 = 돌고래 점프 정도. 파였다가 되튄다 */
   const splash = useCallback((x: number, z: number, strength: number) => sim.push(x, z, 0.35 + 0.3 * strength, -0.25 * strength), [sim]);
+  /** 활주 항적 등 작은 파임 (반지름·세기를 직접 준다) */
+  const wake = useCallback((x: number, z: number, radius: number, strength: number) => sim.push(x, z, radius, strength), [sim]);
 
   useEffect(() => {
     const inst = rocksRef.current;
@@ -455,6 +461,16 @@ function Scene({ creatures, flavour, onReady }: Props) {
       tmp.v.set(FOCUS_REEF.x + CAM_BACK.x * Math.cos(CAM_EL) * fr, fy + Math.sin(CAM_EL) * fr, FOCUS_REEF.z + CAM_BACK.z * Math.cos(CAM_EL) * fr);
       camera.position.copy(tmp.v);
       camera.lookAt(FOCUS_REEF.x, fy, FOCUS_REEF.z);
+    } else if (FOCUS_PLANE) {
+      // 점검용 근접 뷰: 비행기 진행 방향 기준 방위 (q: 앞 오른쪽 3/4, side: 오른쪽 옆, front: 기수 앞, top: 위)
+      const f = PLANE_FOCUS;
+      const fr = 4.4;
+      const rel = PLANE_VIEW === "side" ? Math.PI / 2 : PLANE_VIEW === "front" ? 0 : PLANE_VIEW === "back" ? Math.PI : PLANE_VIEW === "top" ? Math.PI / 2 : Math.PI / 4;
+      const fel = THREE.MathUtils.degToRad(PLANE_VIEW === "top" ? 84 : 22);
+      const az = f.yaw - rel; // yaw 기준 오른쪽 = −z 쪽 (yaw 가 x→−z 로 돈다)
+      tmp.v.set(f.pos.x + Math.cos(az) * Math.cos(fel) * fr, f.pos.y + Math.sin(fel) * fr, f.pos.z - Math.sin(az) * Math.cos(fel) * fr);
+      camera.position.copy(tmp.v);
+      camera.lookAt(f.pos.x, f.pos.y, f.pos.z);
     } else if (FOCUS_GUESTS) {
       // 야자수 잎은 Palms 가 숨긴다 (점검용)
       const fr = 6.0, fel = THREE.MathUtils.degToRad(50);
@@ -681,6 +697,8 @@ function Scene({ creatures, flavour, onReady }: Props) {
         <planeGeometry args={[W, D]} />
       </mesh>
       </primitive>
+      {/* 수상기: 블록 바깥 상공을 돌다 앞바다에 착수·이륙 (물 위에선 블록 행렬을 따라간다 — 공중은 전단을 받지 않게 블록 밖에 둔다) */}
+      {!PLANE_OFF && <Seaplane jelly={block} groundY={BLOCK_BOTTOM} onSplash={splash} onWake={wake} />}
       {simDebugMat && (
         <mesh material={simDebugMat} frustumCulled={false} renderOrder={1000}>
           <planeGeometry args={[2, 2]} />

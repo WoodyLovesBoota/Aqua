@@ -82,15 +82,20 @@ export function Precompile({ onReady }: { onReady?: () => void } = {}) {
 
   useEffect(() => {
     let alive = true;
+    let started = false;
     const start = () => {
-      if (!alive) return;
+      if (!alive || started) return;
+      started = true;
       setFrameloop("always");
       invalidate();
       onReady?.();
     };
     compileSpread(gl, scene, camera, scene, () => alive, extra).then(start, start);
+    // 안전망: 워밍업이 어떤 이유로든(백그라운드 탭의 타이머 스로틀 등) 늦어져도 로딩 화면에 갇히지 않게 그냥 시작한다
+    const fallback = setTimeout(start, 6000);
     return () => {
       alive = false;
+      clearTimeout(fallback);
     };
   }, [gl, scene, camera, setFrameloop, invalidate, extra, onReady]);
 
