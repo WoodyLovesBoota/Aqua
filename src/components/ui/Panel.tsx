@@ -165,3 +165,13 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
     </div>
   );
 }
+
+/** 읽기 전용 값 한 줄 (큰 숫자 + 옆 설명) */
+export function Readout({ value, note }: { value: string; note?: string }) {
+  return (
+    <p className={cx("readout")} aria-live="off">
+      <b>{value}</b>
+      {note && <span>{note}</span>}
+    </p>
+  );
+}

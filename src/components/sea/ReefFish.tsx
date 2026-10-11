@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { DEBUG_ON, publishDebug } from "@/components/creature/debugProbe";
+import { ENV } from "@/components/three/sceneEnv";
 import { floorHeight } from "./lagoonHeight";
 import { TANK } from "./lagoonNav";
 import { REEFS } from "./Reef";
@@ -127,6 +128,7 @@ const vert = /* glsl */ `
 const frag = /* glsl */ `
   precision highp float;
   uniform vec3 uCamPos;
+  uniform vec3 uEnvLight;
   varying vec3 vLocal;
   varying vec3 vN;
   varying vec3 vWorld;
@@ -187,7 +189,7 @@ const frag = /* glsl */ `
     vec3 hemi = mix(vec3(0.55, 0.62, 0.72), vec3(1.0, 1.0, 1.0), sky);
     float diff = 0.45 + 0.55 * max(dot(n, L), 0.0);
     float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0) * 0.22;
-    vec3 outCol = col * hemi * diff + rim * vec3(0.9, 0.95, 1.0) + col * 0.08;
+    vec3 outCol = (col * hemi * diff + rim * vec3(0.9, 0.95, 1.0) + col * 0.08) * uEnvLight; // 하루 주기 환경광
     gl_FragColor = vec4(outCol, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -228,7 +230,7 @@ export function ReefFish({ others }: Props) {
     return g;
   }, []);
   const mat = useMemo(
-    () => new THREE.ShaderMaterial({ vertexShader: vert, fragmentShader: frag, uniforms: { uCamPos: { value: new THREE.Vector3() } }, side: THREE.DoubleSide }),
+    () => new THREE.ShaderMaterial({ vertexShader: vert, fragmentShader: frag, uniforms: { uCamPos: { value: new THREE.Vector3() }, uEnvLight: ENV.uEnvLight }, side: THREE.DoubleSide }),
     [],
   );
   const tmp = useMemo(() => ({ v: new THREE.Vector3(), fwd: new THREE.Vector3(), e: new THREE.Euler(), q: new THREE.Quaternion(), s: new THREE.Vector3(), m: new THREE.Matrix4() }), []);

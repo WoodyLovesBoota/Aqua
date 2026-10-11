@@ -1,5 +1,8 @@
 import * as THREE from "three";
 
+/** 젤리 블록 둘레 모서리 반지름 (수조·젤리 큐브 뚜껑 공용). 물 윗모서리는 둥글리지 않는다 — 뚜껑 벽이 곧게 이어진다 */
+export const BLOCK_CORNER = 0.9;
+
 /** 옆면 단면 한 점: 둘레에서 바깥(+)/안쪽(-)으로 o 만큼, 높이 y, 법선 (바깥 nr, 위 ny) */
 export interface ProfilePoint {
   o: number;

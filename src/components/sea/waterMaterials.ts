@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { floorHeightGLSL } from "./lagoonHeight";
+import { ENV } from "./dayCycle";
 import { SIM_TEXEL } from "./waterSim";
 
 /** 둥근 사각형 SDF (바깥 > 0) — 수면·모래가 둘레 밖을 버릴 때 공용 */
@@ -8,6 +9,21 @@ float roundedRect(vec2 p, vec2 half_, float corner) {
   return length(max(abs(p) - (half_ - corner), 0.0)) - corner;
 }
 `;
+
+/** 하루 주기 공용 유니폼 (dayCycle.ENV) — 자체 조명 셰이더가 환경광·주광·하늘색·조명 켜짐을 같이 본다 */
+const envGLSL = /* glsl */ `
+uniform vec3 uEnvLight;  // 선형 배율 (정오 1, 밤 ≈ 0.1~0.3 푸른빛)
+uniform vec3 uKeyDir;    // 주광(해/달)이 오는 방향 (월드)
+uniform vec3 uKeyCol;    // 주광 반사 색 × 세기
+uniform vec3 uSkyCol;    // 비치는 하늘 색
+uniform float uSunUp;    // 해가 떠 있는 정도 (커스틱·빛줄기)
+uniform float uLamp;     // 밤 조명 켜짐
+`;
+
+/** 밤 빛 웅덩이 자리 개수: 방갈로 수중등(수면) · 섬 횃불(모래) */
+export const POOL_N = 8;
+export const TORCH_N = 4;
+const zeros = (n: number) => Array.from({ length: n }, () => new THREE.Vector2(1e4, 1e4));
 
 /** 공통: 수면 높이 — 기본 잔물결(해석적) + 시뮬 높이 텍스처(waterSim) */
 const heightGLSL = /* glsl */ `
@@ -88,7 +104,7 @@ precision highp float;
 uniform float uTime;
 uniform vec3 uShallow;
 uniform vec3 uDeep;
-uniform vec3 uLightDir;
+${envGLSL}
 uniform sampler2D uBelow;     // 수면을 뺀 장면 (굴절용)
 uniform vec2 uResolution;     // 드로잉 버퍼 크기
 uniform float uRefract;       // 굴절 세기
@@ -97,6 +113,7 @@ uniform vec2 uHalf;
 uniform float uCorner;
 uniform float uTop;
 uniform float uBottom;
+uniform vec2 uPools[${POOL_N}]; // 방갈로 수중등 자리 (월드 xz)
 ${roundedRectGLSL}
 varying vec3 vWorld;
 varying vec3 vNormalW;
@@ -113,11 +130,11 @@ float caustic(vec2 p, float t) {
 }
 
 void main() {
-  // 둥근 사각형 바깥은 버린다 (옆면 윗모서리 둥글림 안쪽에 딱 맞춤)
+  // 둥근 사각형(물 옆면 둘레) 바깥은 버린다
   if (roundedRect(vUvP, uHalf, uCorner) > 0.0) discard;
   vec3 n = normalize(vNormalW);
   vec3 v = normalize(uCamPos - vWorld);
-  vec3 l = normalize(uLightDir);
+  vec3 l = normalize(uKeyDir);
   float fres = pow(1.0 - max(dot(n, v), 0.0), 2.4);
 
   // 수심: 모래 높이맵 기준(정점에서 보간). 얕은 곳은 민트, 깊은 곳은 청록
@@ -133,30 +150,48 @@ void main() {
   // 물 색: 아래 장면에 물빛을 곱하고(색유리) 깊이만큼 물빛을 더한다
   vec3 tint = mix(uShallow, uDeep, pow(dk, 0.75));
   float absorb = 0.5 + 0.4 * dk;
-  vec3 col = below * mix(vec3(1.0), tint * 1.1, absorb) + tint * (0.06 + 0.2 * dk);
-  col += caustic(vUvP, uTime) * 0.07 * vec3(1.0, 1.0, 0.95);
+  // 아래 장면은 이미 시간대 빛을 받았다 — 물이 더하는 빛(산란)만 환경광을 곱한다
+  vec3 col = below * mix(vec3(1.0), tint * 1.1, absorb) + tint * (0.06 + 0.2 * dk) * uEnvLight;
+  col += caustic(vUvP, uTime) * 0.07 * vec3(1.0, 1.0, 0.95) * uSunUp;
 
   // 물가 거품: 해안선 띠 + 밀려오는 잔거품
   float shore = smoothstep(0.45, 0.0, depth);
   float lap = sin(depth * 34.0 - uTime * 1.8 + sin(vWorld.x * 2.3 + vWorld.z * 1.7 + uTime * 0.4) * 2.5);
   float foamShore = smoothstep(0.1, 0.0, depth) + shore * smoothstep(0.55, 1.0, lap) * 0.7;
   foamShore = clamp(foamShore, 0.0, 1.0);
-  col = mix(col, vec3(1.0), foamShore * 0.85);
+  col = mix(col, vec3(1.0) * min(uEnvLight * 1.15 + 0.08, vec3(1.0)), foamShore * 0.85);
 
   // 파임: 골은 짙게, 마루 꼭대기(곡률 음수)에 가는 밝은 선, 아주 가파른 비탈만 살짝 희게
   float slope = length(n.xz);
   col = mix(col, uDeep * 0.75, smoothstep(-0.015, -0.1, vR) * 0.35);
   float crestLine = smoothstep(0.0025, 0.008, -vLap);
-  col = mix(col, vec3(0.92, 0.99, 1.0), crestLine * 0.5);
+  col = mix(col, vec3(0.92, 0.99, 1.0) * min(uEnvLight * 1.2 + 0.1, vec3(1.0)), crestLine * 0.5);
   float ridge = smoothstep(0.5, 1.2, slope);
-  col = mix(col, vec3(0.93, 0.99, 1.0), ridge * 0.1);
+  col = mix(col, vec3(0.93, 0.99, 1.0) * uEnvLight, ridge * 0.1);
 
   vec3 h = normalize(l + v);
   float ndh = max(dot(n, h), 0.0);
   float spec = pow(ndh, 80.0);
-  col += spec * 0.45 + pow(ndh, 16.0) * 0.05; // 가는 하이라이트 + 넓은 광택
-  // 비스듬히 볼수록 종이색 하늘이 비친다
-  col = mix(col, vec3(0.94, 0.93, 0.9), fres * 0.4);
+  col += (spec * 0.45 + pow(ndh, 16.0) * 0.05) * uKeyCol; // 가는 하이라이트 + 넓은 광택 (해/달 색)
+  // 밤: 방갈로 아래 수중등이 물을 밝은 청록으로 비춘다 (빛 그물이 일렁인다)
+  if (uLamp > 0.001) {
+    vec2 wp = vec2(vUvP.x, -vUvP.y);
+    float pool = 0.0;
+    for (int i = 0; i < ${POOL_N}; i++) {
+      vec2 d = wp - uPools[i];
+      pool += exp(-dot(d, d) * 1.8);
+    }
+    float ripple = 0.75 + 0.5 * caustic(vUvP * 0.8, uTime * 1.3);
+    col += vec3(0.2, 0.95, 0.85) * min(pool, 1.4) * ripple * uLamp * 0.45;
+  }
+  // 반짝이: 물결 위 작은 빛 조각이 따로 깜빡인다 — 낮엔 옅게(햇빛), 밤엔 또렷한 달빛 (장난감 무대답게 과장)
+  vec2 gp = vUvP * 14.0 + vec2(uTime * 0.12, -uTime * 0.07);
+  vec2 gc = floor(gp);
+  float gh = fract(sin(dot(gc, vec2(41.3, 289.1))) * 43758.5453);
+  float glint = step(0.9, gh) * smoothstep(0.16, 0.0, length(fract(gp) - 0.5)) * pow(0.5 + 0.5 * sin(uTime * (2.0 + gh * 4.0) + gh * 60.0), 3.0);
+  col += glint * mix(vec3(1.0, 0.97, 0.85), vec3(0.85, 0.92, 1.0), 1.0 - uSunUp) * mix(0.35, 0.9, 1.0 - uSunUp) * (1.0 - foamShore);
+  // 비스듬히 볼수록 하늘이 비친다 (낮 종이색 → 노을 주황 → 밤 남색)
+  col = mix(col, uSkyCol, fres * 0.4);
 
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
@@ -187,8 +222,9 @@ export class WaterSurfaceMaterial extends THREE.ShaderMaterial {
         uBottom: { value: bottom },
         uShallow: { value: new THREE.Color("#a8f0e6") },
         uDeep: { value: new THREE.Color("#27b5c6") },
-        uLightDir: { value: new THREE.Vector3(0.4, 1, 0.3).normalize() },
         uCamPos: { value: new THREE.Vector3() },
+        uPools: { value: zeros(POOL_N) },
+        ...ENV,
       },
     });
   }
@@ -214,6 +250,7 @@ uniform float uBottom;
 uniform float uOpacity;
 uniform vec3 uCamPos;
 uniform float uTime;
+${envGLSL}
 varying vec3 vWorld;
 varying vec3 vNormalW;
 void main() {
@@ -221,14 +258,12 @@ void main() {
   vec3 v = normalize(uCamPos - vWorld);
   float depth = clamp((uTop - vWorld.y) / (uTop - uBottom), 0.0, 1.0);
   vec3 col = mix(uShallow, uDeep, pow(depth, 0.7));
-  // 옆면으로 비치는 빛줄기
+  // 옆면으로 비치는 빛줄기 (해가 떠 있을 때만)
   float ray = sin(vWorld.x * 3.0 + vWorld.z * 2.0 + uTime * 0.6) * 0.5 + 0.5;
-  col += ray * (1.0 - depth) * 0.08;
+  col += ray * (1.0 - depth) * 0.08 * uSunUp;
   float fres = pow(1.0 - max(dot(n, v), 0.0), 3.0);
-  col = mix(col, vec3(0.9, 0.97, 1.0), fres * 0.3);
-  // 수면 바로 아래 밝은 띠
-  float rim = smoothstep(0.08, 0.0, uTop - vWorld.y);
-  col += rim * 0.25;
+  col = mix(col, mix(vec3(0.9, 0.97, 1.0), uSkyCol, 0.5), fres * 0.3);
+  col *= uEnvLight;
   float alpha = mix(uOpacity, 0.55, fres); // 비스듬히 봐도 안이 보이게
   if (!gl_FrontFacing) alpha *= 0.5; // 뒷면은 옅게 겹쳐 물 밀도를 만든다
   gl_FragColor = vec4(col, alpha);
@@ -252,6 +287,7 @@ export class WaterSideMaterial extends THREE.ShaderMaterial {
         uOpacity: { value: 0.5 },
         uCamPos: { value: new THREE.Vector3() },
         uTime: { value: 0 },
+        ...ENV,
       },
     });
   }
@@ -267,6 +303,8 @@ uniform float uTop;
 uniform float uBottom;
 uniform vec2 uHalf;
 uniform float uCorner;
+uniform vec2 uTorches[${TORCH_N}]; // 섬 횃불 자리 (월드 xz)
+${envGLSL}
 varying vec3 vWorld;
 varying vec3 vNormalW;
 ${roundedRectGLSL}
@@ -304,9 +342,19 @@ void main() {
   // 커스틱은 얕고 평평한 모래에서 또렷하고, 경사·깊은 곳에선 흐려진다
   float flat_ = smoothstep(0.55, 0.95, n.y);
   float causticK = under * flat_ * mix(0.45, 1.0, 1.0 - dk);
-  col += (c1 * 0.2 + c2 * 0.12) * vec3(1.0, 1.0, 0.95) * causticK;
+  col += (c1 * 0.2 + c2 * 0.12) * vec3(1.0, 1.0, 0.95) * causticK * uSunUp;
   float shade = 0.74 + 0.26 * max(dot(n, normalize(vec3(0.4, 0.9, 0.5))), 0.0);
-  gl_FragColor = vec4(col * shade, 1.0);
+  vec3 lit = col * shade * uEnvLight;
+  // 밤: 횃불 둘레 모래가 주황빛으로 물든다
+  if (uLamp > 0.001) {
+    float warm = 0.0;
+    for (int i = 0; i < ${TORCH_N}; i++) {
+      vec2 d = p - uTorches[i];
+      warm += exp(-dot(d, d) * 3.0);
+    }
+    lit += col * vec3(1.0, 0.55, 0.25) * min(warm, 1.2) * uLamp * 0.55 * smoothstep(-0.05, 0.05, above);
+  }
+  gl_FragColor = vec4(lit, 1.0);
   #include <colorspace_fragment>
 }
 `;
@@ -324,6 +372,8 @@ export class SandFloorMaterial extends THREE.ShaderMaterial {
         uBottom: { value: bottom },
         uHalf: { value: new THREE.Vector2(halfX, halfZ) },
         uCorner: { value: corner },
+        uTorches: { value: zeros(TORCH_N) },
+        ...ENV,
       },
     });
   }
@@ -335,6 +385,7 @@ precision highp float;
 varying vec3 vWorld;
 varying vec3 vNormalW;
 uniform float uTop;
+${envGLSL}
 float hash(vec3 p) {
   p = fract(p * vec3(443.897, 441.423, 437.195));
   p += dot(p, p.yzx + 19.19);
@@ -356,7 +407,7 @@ void main() {
     col += step(0.9, sp) * 0.45;
   }
   float shade = 0.72 + 0.28 * max(dot(normalize(vNormalW), normalize(vec3(0.4, 0.9, 0.5))), 0.0);
-  gl_FragColor = vec4(col * shade, 1.0);
+  gl_FragColor = vec4(col * shade * uEnvLight, 1.0);
   #include <colorspace_fragment>
 }
 `;
@@ -366,7 +417,7 @@ export class StrataMaterial extends THREE.ShaderMaterial {
     super({
       vertexShader: sideVertex,
       fragmentShader: strataFragment,
-      uniforms: { uTop: { value: top } },
+      uniforms: { uTop: { value: top }, ...ENV },
     });
   }
 }
@@ -376,6 +427,7 @@ const shaftFragment = /* glsl */ `
 precision highp float;
 uniform vec3 uColor;
 uniform float uTime;
+${envGLSL}
 varying vec2 vUv;
 varying float vSeed;
 void main() {
@@ -383,7 +435,8 @@ void main() {
   float edge = 1.0 - smoothstep(0.2, 1.0, x);
   float fall = smoothstep(0.0, 0.25, vUv.y) * pow(vUv.y, 1.6);
   float flick = 0.75 + 0.25 * sin(uTime * 0.7 + vSeed * 6.0 + vUv.y * 3.0);
-  gl_FragColor = vec4(uColor, edge * fall * flick * 0.45);
+  // 해 빛줄기 — 해가 지면 사라지고, 노을엔 해 색을 띤다
+  gl_FragColor = vec4(uColor * mix(vec3(1.0), uKeyCol, 0.6), edge * fall * flick * 0.45 * uSunUp);
 }
 `;
 const shaftVertex = /* glsl */ `
@@ -406,7 +459,7 @@ export class LightShaftMaterial extends THREE.ShaderMaterial {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
-      uniforms: { uColor: { value: new THREE.Color("#dff4ff") }, uTime: { value: 0 } },
+      uniforms: { uColor: { value: new THREE.Color("#dff4ff") }, uTime: { value: 0 }, ...ENV },
     });
   }
 }

@@ -21,16 +21,17 @@ import {
   WaterSideMaterial,
   WaterSurfaceMaterial,
 } from "./waterMaterials";
-import { roundedPlate, roundedSlab, slabProfile } from "./tankGeometry";
+import { BLOCK_CORNER, roundedPlate, roundedSlab, slabProfile } from "./tankGeometry";
 import { SimDebugMaterial, WaterSim } from "./waterSim";
 import { floorHeight, S } from "./lagoonHeight";
 import { blobShadowTexture, blocked, BOUNDS, pushAway, randomTarget, TANK, yawDelta } from "./lagoonNav";
 import { LagoonSwimmer } from "./LagoonSwimmer";
 import { SWIMMERS } from "./swimBehaviours";
+import { LagoonDay, SKY_LAYER } from "./LagoonDay";
 import { Palms } from "./Palms";
 import { Reef, REEFS } from "./Reef";
 import { ReefFish } from "./ReefFish";
-import { Resort } from "./Resort";
+import { BUNGALOWS, Resort, TORCHES } from "./Resort";
 import { Shadows } from "./Shadows";
 
 interface Props {
@@ -44,12 +45,11 @@ interface Props {
 // 수조 치수(lagoonNav.TANK): 젤리 블록 같은 둥근 라군
 const { W, D, TOP, BOTTOM } = TANK;
 const STRATA_H = 1.35;
-const CORNER = 0.9; // 둘레 모서리 반지름
-const BEVEL = 0.3; // 물 윗모서리 둥글기
+const CORNER = BLOCK_CORNER; // 둘레 모서리 반지름
 const SHARK_SCALE = 0.42; // 몸길이 ≈ 1.4 (돌고래 1.15 의 1.2배)
 const SHADOW_K = SHARK_SCALE / 0.66; // 그림자 크기는 0.66 기준으로 적어둔 값
 // 카메라: 디오라마처럼 위에서 비스듬히 내려다본다 (방위각·앙각 고정)
-const CAM = { az: 35, el: 34, r: 37, fov: 26, lookY: -1.3 };
+const CAM = { az: 35, el: 34, r: 40, fov: 26, lookY: -1.3 }; // r 은 맵 17×13.6 + 뚜껑이 데스크톱 프레임에 들어오는 거리
 const CAM_AZ = THREE.MathUtils.degToRad(CAM.az);
 const CAM_EL = THREE.MathUtils.degToRad(CAM.el);
 // 카메라 기준 xz 축: 화면 오른쪽 / 카메라 뒤쪽(= 화면 아래, 가까운 쪽)
@@ -132,8 +132,8 @@ function Scene({ creatures, flavour, onReady }: Props) {
   // 포인터 상태: 마지막 수면 좌표(궤적 보간용)와 누름 여부(누른 채 멈춰 있으면 계속 판다)
   const pointer = useRef({ x: 0, z: 0, has: false, down: false });
 
-  // 수면은 윗모서리 둥글림만큼 안쪽 둥근 사각형으로 잘린다
-  const surfaceMat = useMemo(() => new WaterSurfaceMaterial(W / 2 - BEVEL, D / 2 - BEVEL, CORNER - BEVEL, TOP, BOTTOM), []);
+  // 수면은 물 옆면 둘레와 같은 둥근 사각형으로 잘린다
+  const surfaceMat = useMemo(() => new WaterSurfaceMaterial(W / 2, D / 2, CORNER, TOP, BOTTOM), []);
   const surfaceMesh = useRef<THREE.Mesh>(null!);
   // 수면 높이장 시뮬 (핑퐁 렌더타깃) — 파임·벽 반사·간섭
   const sim = useMemo(() => new WaterSim(W, D), []);
@@ -145,6 +145,11 @@ function Scene({ creatures, flavour, onReady }: Props) {
   const clearTmp = useMemo(() => new THREE.Color(), []);
   const sideMat = useMemo(() => new WaterSideMaterial(TOP, BOTTOM), []);
   const floorMat = useMemo(() => new SandFloorMaterial(TOP, BOTTOM, W / 2, D / 2, CORNER), []);
+  // 밤 빛 웅덩이 자리: 방갈로 수중등(수면) · 섬 횃불(모래)
+  useEffect(() => {
+    BUNGALOWS.forEach((b, i) => (surfaceMat.uniforms.uPools.value as THREE.Vector2[])[i].set(b.x, b.z));
+    TORCHES.forEach(([x, z], i) => (floorMat.uniforms.uTorches.value as THREE.Vector2[])[i].set(x, z));
+  }, [surfaceMat, floorMat]);
   const strataMat = useMemo(() => new StrataMaterial(BOTTOM), []);
   const shadowTex = useMemo(() => blobShadowTexture(), []);
   const shaftMat = useMemo(() => new LightShaftMaterial(), []);
@@ -162,8 +167,8 @@ function Scene({ creatures, flavour, onReady }: Props) {
     geos.forEach((g) => g.dispose());
     return merged;
   }, []);
-  // 물 옆면: 둥근 둘레 + 윗모서리 둥글림 (뚜껑 없음 — 수면·모래가 덮는다)
-  const sideGeo = useMemo(() => roundedSlab(W / 2, D / 2, CORNER, slabProfile(BOTTOM, TOP, BEVEL, 0)), []);
+  // 물 옆면: 둥근 둘레, 윗모서리는 곧게 (위는 수면이 덮고 젤리 큐브 뚜껑 벽이 이어진다)
+  const sideGeo = useMemo(() => roundedSlab(W / 2, D / 2, CORNER, slabProfile(BOTTOM, TOP, 0, 0)), []);
   // 지층: 옆면 + 윗판 (모래가 솟은 자리 아래로 속이 비치지 않게 덮는다)
   const strataGeo = useMemo(() => {
     const side = roundedSlab(W / 2, D / 2, CORNER, slabProfile(BOTTOM - STRATA_H, BOTTOM, 0, 0.4));
@@ -572,10 +577,12 @@ function Scene({ creatures, flavour, onReady }: Props) {
       surfaceMesh.current.visible = false;
       gl.getClearColor(clearTmp);
       const ca = gl.getClearAlpha();
-      gl.setClearColor(0xf1eee8, 1); // 블록 밖은 종이색
+      gl.setClearColor(0xf1eee8, 1); // 블록 밖은 종이색 (하늘 장난감은 레이어 1 이라 이 패스에서 빠진다)
+      camera.layers.disable(SKY_LAYER);
       gl.setRenderTarget(below);
       gl.render(scene, camera);
       gl.setRenderTarget(null);
+      camera.layers.enable(SKY_LAYER);
       gl.setClearColor(clearTmp, ca);
       surfaceMesh.current.visible = true;
       surfaceMat.uniforms.uBelow.value = below.texture;
@@ -585,9 +592,8 @@ function Scene({ creatures, flavour, onReady }: Props) {
 
   return (
     <ExtraTargets.Provider value={extraTargets}>
-      <hemisphereLight args={["#ffffff", "#8fa5b8", 1.0]} />
-      <directionalLight position={[3, 6, 2]} intensity={1.5} />
-      <directionalLight position={[-4, 2, -3]} intensity={0.35} color="#cfe6ff" />
+      {/* 하루 주기: 하늘·해·달·별·조명 (실제 1시간 = 24시간) */}
+      <LagoonDay />
 
       {/* 블록 전체: 아래 지층·모래를 잡고 흔들면 푸딩처럼 전단·스쿼시로 출렁인다 (행렬은 useFrame 이 직접 쓴다) */}
       <group ref={block} matrixAutoUpdate={false}>

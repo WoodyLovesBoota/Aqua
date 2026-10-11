@@ -4,32 +4,14 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { floorHeight, S } from "./lagoonHeight";
+import { floorHeight } from "./lagoonHeight";
+import { PALMS } from "./resortLayout";
 
 /**
  * 야자수 — 기준 키 1 로 정밀하게 만들고 그루마다 축소한다.
  * 줄기: 마디가 있는 테이퍼 튜브. 잎: 축(튜브) + 잎몸 24쌍(각각 5정점 4삼각형).
  */
-interface PalmDef {
-  x: number;
-  z: number;
-  h: number;
-  yaw: number;
-  ph: number;
-}
-
-export const PALMS: PalmDef[] = (
-  [
-    { x: -2.9, z: -2.6, h: 2.2, yaw: 3.6, ph: 0 },
-    { x: -2.05, z: -2.85, h: 1.85, yaw: 4.4, ph: 1.1 },
-    { x: -1.45, z: -2.25, h: 1.55, yaw: 5.6, ph: 2.3 },
-    { x: -2.6, z: -1.45, h: 2.0, yaw: 1.4, ph: 0.7 },
-    { x: -3.25, z: -2.0, h: 1.7, yaw: 2.6, ph: 1.8 },
-    { x: -1.85, z: -1.55, h: 1.4, yaw: 0.6, ph: 2.9 },
-    { x: -1.05, z: -2.75, h: 1.2, yaw: 5.0, ph: 0.4 },
-    { x: -3.4, z: -1.2, h: 1.3, yaw: 2.0, ph: 1.4 },
-  ] as PalmDef[]
-).map((p) => ({ ...p, x: p.x * S, z: p.z * S }));
+export { PALMS };
 
 /** 정점 색은 선형 공간이라, 눈으로 고른 sRGB 값을 변환해 넣는다 */
 const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));

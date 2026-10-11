@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ENV } from "@/components/three/sceneEnv";
 
 /**
  * 플러시 인형 머티리얼 (단일 패스, 불투명).
@@ -254,6 +255,7 @@ uniform vec3 uLightDir;   // view space
 uniform float uWet;       // 물속이면 1
 uniform float uTime;
 uniform vec3 uWaterTint;  // 물 색 (깊이 기운)
+uniform vec3 uEnvLight;   // 수조 하루 주기 환경광 (정오 1) — 물속(uWet)일 때만 곱한다
 
 varying vec3 vObj;
 varying vec3 vNormalV;
@@ -320,6 +322,8 @@ void main() {
   // 물 너머로 보여도 색이 죽지 않게: 밝기·채도 보정
   float lum = dot(col, vec3(0.299, 0.587, 0.114));
   col = mix(col, mix(vec3(lum), col, 1.35) * 1.15, uWet);
+  // 수조의 밤: 생물도 같이 어두워진다 (스튜디오는 uWet 0 이라 그대로)
+  col *= mix(vec3(1.0), uEnvLight, uWet);
 
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
@@ -345,6 +349,7 @@ export class PlushMaterial extends THREE.ShaderMaterial {
         uLightDir: { value: new THREE.Vector3(0.4, 0.8, 0.6).normalize() },
         uWet: { value: 0 },
         uWaterTint: { value: new THREE.Color("#7fc4ff") },
+        uEnvLight: ENV.uEnvLight,
       },
       side: THREE.FrontSide,
     });

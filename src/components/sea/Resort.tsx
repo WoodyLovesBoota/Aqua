@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { floorHeight, S } from "./lagoonHeight";
+import { ENV } from "@/components/three/sceneEnv";
+import { floorHeight } from "./lagoonHeight";
 import { PALMS } from "./Palms";
+import { bridgeStart, BUNGALOWS, BUSHES, DECK_Y, HAMMOCK, HUT, PLANK_W, SPINE, STATIC_BOATS, SUNBEDS, TORCHES, UMBRELLAS } from "./resortLayout";
+
+export { BUNGALOWS, TORCHES };
 
 /**
  * 리조트 소품 — 수상 방갈로·데크·파라솔·선베드·보트.
@@ -23,35 +28,68 @@ const MATS = {
   coral: new THREE.MeshStandardMaterial({ color: "#ef8a78", roughness: 0.8, side: THREE.DoubleSide }),
   white: new THREE.MeshStandardMaterial({ color: "#fbfbf7", roughness: 0.6, side: THREE.DoubleSide }),
   bush: new THREE.MeshStandardMaterial({ color: "#4e9a4f", roughness: 0.9, flatShading: true }),
+  // 밤 조명: 창·문(낮엔 짙은 유리)과 전구(낮엔 크림색). 발광 세기는 하루 주기(ENV.uLamp)를 따른다
+  glass: new THREE.MeshStandardMaterial({ color: "#7d6f5c", roughness: 0.4, emissive: "#ff9a3d", emissiveIntensity: 0 }),
+  bulb: new THREE.MeshStandardMaterial({ color: "#fff4dc", roughness: 0.5, emissive: "#ffc874", emissiveIntensity: 0 }),
 };
 type Bucket = keyof typeof MATS;
 
-/** 데크 보도 척추선 — 섬 모래톱에서 바다 쪽으로 */
-const SPINE: [number, number][] = (
-  [
-    [-0.75, -2.5],
-    [0.9, -2.35],
-    [2.4, -1.95],
-    [3.4, -1.25],
-  ] as [number, number][]
-).map(([x, z]) => [x * S, z * S]);
-/** 방갈로 위치·방향. 보도에서 짧은 다리로 이어진다 */
-export const BUNGALOWS: { x: number; z: number; yaw: number }[] = (
-  [
-    { x: 0.7, z: -3.2, yaw: 0.1 },
-    { x: 1.75, z: -3.15, yaw: -0.2 },
-    { x: 2.8, z: -2.9, yaw: 0.3 },
-    { x: 3.75, z: -2.3, yaw: 0.6 },
-    { x: 1.25, z: -1.5, yaw: 0.2 },
-    { x: 2.3, z: -1.05, yaw: -0.3 },
-    { x: 3.3, z: -0.4, yaw: 0.5 },
-    { x: 4.1, z: -1.4, yaw: 0.9 },
-  ] as { x: number; z: number; yaw: number }[]
-).map((b) => ({ ...b, x: b.x * S, z: b.z * S }));
+interface GlowPoint {
+  x: number;
+  y: number;
+  z: number;
+  size: number;
+  color: string;
+  flicker: number;
+}
 
-const DECK_Y = 0.12; // 수면 위 데크 높이
-const PLANK_W = 0.26;
-const HUT = 0.56; // 방갈로 축소 배율 (기준 한 변 1)
+
+/**
+ * 밤 조명 후광: 점 스프라이트 하나(가산 혼합, 1 드로우). 크기는 월드 단위 → 화면 픽셀로 바꾼다.
+ * 횃불(aFlick 1)은 일렁이고, 전구는 아주 살짝 숨쉰다. 세기는 ENV.uLamp.
+ */
+const haloVert = /* glsl */ `
+attribute vec3 aColor;
+attribute float aSize;
+attribute float aFlick;
+uniform float uPx;      // 투영 배율: 화면 높이(px) × 0.5 × projectionMatrix[1][1]
+uniform float uTime;
+uniform float uLamp;
+varying vec3 vColor;
+varying float vK;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  float seed = position.x * 7.1 + position.z * 3.7;
+  float flick = mix(0.94 + 0.06 * sin(uTime * 1.3 + seed), 0.8 + 0.12 * sin(uTime * 9.0 + seed) + 0.08 * sin(uTime * 23.0 + seed * 2.0), aFlick);
+  vColor = aColor;
+  vK = uLamp * flick;
+  gl_PointSize = aSize * uPx / -mv.z * (0.85 + 0.15 * flick) * step(0.001, uLamp);
+  gl_Position = projectionMatrix * mv;
+}
+`;
+const haloFrag = /* glsl */ `
+precision highp float;
+varying vec3 vColor;
+varying float vK;
+void main() {
+  vec2 d = gl_PointCoord - 0.5;
+  float r2 = dot(d, d) * 4.0;
+  float core = exp(-r2 * 18.0);
+  float glow = exp(-r2 * 4.0) * (1.0 - r2);
+  vec3 col = (vColor * glow * 0.75 + vec3(1.0, 0.97, 0.9) * core * 0.6) * vK;
+  gl_FragColor = vec4(col, 1.0);
+  #include <colorspace_fragment>
+}
+`;
+const HALO_MAT = new THREE.ShaderMaterial({
+  vertexShader: haloVert,
+  fragmentShader: haloFrag,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  uniforms: { uPx: { value: 1 }, uTime: { value: 0 }, uLamp: ENV.uLamp },
+});
+
 
 const NO_UV = (g: THREE.BufferGeometry) => {
   g.deleteAttribute("uv");
@@ -59,7 +97,9 @@ const NO_UV = (g: THREE.BufferGeometry) => {
 };
 
 class Builder {
-  parts: Record<Bucket, THREE.BufferGeometry[]> = { wood: [], dark: [], trim: [], wall: [], thatch: [], coral: [], white: [], bush: [] };
+  parts: Record<Bucket, THREE.BufferGeometry[]> = { wood: [], dark: [], trim: [], wall: [], thatch: [], coral: [], white: [], bush: [], glass: [], bulb: [] };
+  /** 밤에 후광이 생기는 자리 (월드) — 크기는 후광 반지름, flicker 는 횃불 일렁임 */
+  lights: GlowPoint[] = [];
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
   private e = new THREE.Euler();
@@ -94,10 +134,42 @@ class Builder {
     g.computeVertexNormals();
   }
 
-  /** 보도 가로등: 나무 기둥 + 흰 등 */
+  /** 보도 가로등: 나무 기둥 + 전구 */
   lamp(x: number, z: number) {
     this.add("trim", new THREE.CylinderGeometry(0.012, 0.016, 0.3, 5), x, DECK_Y + 0.15, z);
-    this.add("white", new THREE.SphereGeometry(0.03, 7, 6), x, DECK_Y + 0.32, z);
+    this.add("bulb", new THREE.SphereGeometry(0.035, 8, 6), x, DECK_Y + 0.32, z);
+    this.lights.push({ x, y: DECK_Y + 0.32, z, size: 0.32, color: "#ffd08a", flicker: 0 });
+  }
+
+  /** 섬 횃불: 대나무 기둥 + 머리 통. 불꽃은 밤에만 보이는 후광으로 (낮엔 꺼진 횃불) */
+  torch(x: number, z: number) {
+    const y = floorHeight(this.bottom, x, z);
+    this.add("dark", new THREE.CylinderGeometry(0.014, 0.02, 0.5, 5), x, y + 0.25, z);
+    this.add("trim", new THREE.CylinderGeometry(0.045, 0.03, 0.08, 7), x, y + 0.52, z);
+    this.lights.push({ x, y: y + 0.6, z, size: 0.42, color: "#ff9a3c", flicker: 1 });
+  }
+
+  /** 꼬마전구 줄: 두 점 사이 처진 줄에 전구를 0.16 간격으로 */
+  stringLights(ax: number, az: number, ay: number, bx: number, bz: number, by: number) {
+    const len = Math.hypot(bx - ax, bz - az);
+    const n = Math.max(2, Math.round(len / 0.16));
+    const colors = ["#ffe08a", "#ffb3c7", "#bfe3ff", "#c8f5a8"];
+    let px = ax, py = ay, pz = az;
+    for (let i = 1; i <= n; i++) {
+      const t = i / n;
+      const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+      const y = ay + (by - ay) * t - 0.18 * Math.sin(Math.PI * t);
+      // 전선
+      const sl = Math.hypot(x - px, y - py, z - pz);
+      this.add("dark", new THREE.BoxGeometry(sl, 0.006, 0.006), (x + px) / 2, (y + py) / 2, (z + pz) / 2, Math.atan2(-(z - pz), x - px), 1, 1, 1, 0, Math.atan2(y - py, Math.hypot(x - px, z - pz)));
+      if (i < n) {
+        this.add("bulb", new THREE.SphereGeometry(0.022, 6, 5).scale(1, 1.25, 1), x, y - 0.025, z);
+        this.lights.push({ x, y: y - 0.025, z, size: 0.13, color: colors[i % colors.length], flicker: 0 });
+      }
+      px = x;
+      py = y;
+      pz = z;
+    }
   }
 
   /** 덤불: 납작한 다면체 3개 묶음 */
@@ -118,7 +190,7 @@ class Builder {
     for (let i = 0; i < N; i++) {
       const t0 = i / N;
       const t1 = (i + 1) / N;
-      const sag = (t: number) => y - 0.22 * Math.sin(Math.PI * t);
+      const sag = (t: number) => y - HAMMOCK.sag * Math.sin(Math.PI * t);
       const x0 = ax + (bx - ax) * t0;
       const z0 = az + (bz - az) * t0;
       const x1 = ax + (bx - ax) * t1;
@@ -223,11 +295,14 @@ class Builder {
     const hh = 0.55;
     this.local("wall", new THREE.BoxGeometry(0.8, hh, 0.8), F, 0, hh / 2 + 0.04, -0.05);
     this.local("trim", new THREE.BoxGeometry(0.82, 0.06, 0.82), F, 0, 0.07, -0.05); // 하단 띠
-    this.local("trim", new THREE.BoxGeometry(0.2, 0.3, 0.02), F, 0, 0.21, 0.355); // 문
-    this.local("trim", new THREE.BoxGeometry(0.16, 0.14, 0.02), F, -0.26, 0.36, 0.355); // 창
-    this.local("trim", new THREE.BoxGeometry(0.16, 0.14, 0.02), F, 0.26, 0.36, 0.355);
-    this.local("trim", new THREE.BoxGeometry(0.02, 0.14, 0.18), F, 0.405, 0.36, -0.05); // 옆창
-    this.local("trim", new THREE.BoxGeometry(0.02, 0.14, 0.18), F, -0.405, 0.36, -0.05);
+    this.local("glass", new THREE.BoxGeometry(0.2, 0.3, 0.02), F, 0, 0.21, 0.355); // 문 (밤엔 불빛)
+    this.local("glass", new THREE.BoxGeometry(0.16, 0.14, 0.02), F, -0.26, 0.36, 0.355); // 창
+    this.local("glass", new THREE.BoxGeometry(0.16, 0.14, 0.02), F, 0.26, 0.36, 0.355);
+    this.local("glass", new THREE.BoxGeometry(0.02, 0.14, 0.18), F, 0.405, 0.36, -0.05); // 옆창
+    this.local("glass", new THREE.BoxGeometry(0.02, 0.14, 0.18), F, -0.405, 0.36, -0.05);
+    // 창 앞 후광 + 테라스 등
+    const front = new THREE.Vector3(0, 0.3, 0.45).applyMatrix4(F);
+    this.lights.push({ x: front.x, y: front.y, z: front.z, size: 0.55, color: "#ffbe70", flicker: 0 });
     // 지붕: 처마 넓은 4각 뿔 2단 (초가 층) + 꼭대기 매듭
     const roofY = hh + 0.04;
     for (let i = 0; i < 4; i++) {
@@ -303,38 +378,19 @@ class Builder {
 }
 
 export function Resort({ bottom }: { bottom: number }) {
-  const meshes = useMemo(() => {
+  const haloPts = useRef<THREE.Points>(null!);
+  const { meshes, halo } = useMemo(() => {
     const b = new Builder(bottom);
     for (let i = 0; i < SPINE.length - 1; i++) b.plank(...SPINE[i], ...SPINE[i + 1]);
     for (const h of BUNGALOWS) {
       // 척추선에서 가장 가까운 점으로 다리를 놓는다
-      let best: [number, number] = SPINE[0];
-      let bd = Infinity;
-      for (let i = 0; i < SPINE.length - 1; i++) {
-        const [ax, az] = SPINE[i];
-        const [bx, bz] = SPINE[i + 1];
-        const vx = bx - ax;
-        const vz = bz - az;
-        const t = THREE.MathUtils.clamp(((h.x - ax) * vx + (h.z - az) * vz) / (vx * vx + vz * vz), 0, 1);
-        const px = ax + vx * t;
-        const pz = az + vz * t;
-        const d = Math.hypot(h.x - px, h.z - pz);
-        if (d < bd) {
-          bd = d;
-          best = [px, pz];
-        }
-      }
+      const best = bridgeStart(h);
       b.plank(best[0], best[1], h.x, h.z, 0.18, false);
       b.bungalow(h.x, h.z, h.yaw);
     }
-    b.umbrella(-2.0 * S, -1.35 * S, 0.3);
-    b.umbrella(-2.85 * S, -2.75 * S, -0.2);
-    b.umbrella(-1.5 * S, -1.95 * S, 0.1);
-    b.sunbed(-1.75 * S, -1.1 * S, 0.4);
-    b.sunbed(-1.95 * S, -0.95 * S, 0.4);
-    b.sunbed(-2.6 * S, -2.95 * S, -0.3);
-    b.boat(2.3 * S, 1.7 * S, 0.7);
-    b.boat(-0.4 * S, 1.9 * S, -0.4);
+    for (const u of UMBRELLAS) b.umbrella(u.x, u.z, u.lean);
+    for (const sb of SUNBEDS) b.sunbed(sb.x, sb.z, sb.yaw);
+    for (const bt of STATIC_BOATS) b.boat(bt.x, bt.z, bt.yaw);
     // 보도 가로등 (척추선 따라 1.6 간격)
     for (let i = 0; i < SPINE.length - 1; i++) {
       const [ax, az] = SPINE[i];
@@ -348,26 +404,64 @@ export function Resort({ bottom }: { bottom: number }) {
       }
     }
     // 섬 덤불
-    for (const [x, z, sc] of [
-      [-3.1, -2.2, 1],
-      [-2.35, -2.95, 0.8],
-      [-1.7, -2.5, 0.9],
-      [-2.9, -1.3, 0.7],
-      [-1.3, -2.1, 0.6],
-    ])
-      b.bush(x * S, z * S, sc);
-    // 해먹: 1번·4번 야자수 사이
-    b.hammock(PALMS[0].x + 0.1, PALMS[0].z, PALMS[3].x - 0.1, PALMS[3].z, floorHeight(bottom, (PALMS[0].x + PALMS[3].x) / 2, (PALMS[0].z + PALMS[3].z) / 2) + 0.55);
-    return b.build();
+    for (const bu of BUSHES) b.bush(bu.x, bu.z, bu.s);
+    // 해먹: 두 야자수 사이
+    {
+      const pa = PALMS[HAMMOCK.a], pb = PALMS[HAMMOCK.b];
+      b.hammock(pa.x + 0.1, pa.z, pb.x - 0.1, pb.z, floorHeight(bottom, (pa.x + pb.x) / 2, (pa.z + pb.z) / 2) + HAMMOCK.h);
+    }
+    // 섬 횃불 + 야자수 사이 꼬마전구 줄 (밤 조명)
+    for (const [x, z] of TORCHES) b.torch(x, z);
+    for (const [i, j] of [
+      [2, 5],
+      [5, 3],
+      [6, 2],
+    ]) {
+      const a = PALMS[i], c = PALMS[j];
+      b.stringLights(a.x, a.z, floorHeight(bottom, a.x, a.z) + 0.85, c.x, c.z, floorHeight(bottom, c.x, c.z) + 0.85);
+    }
+    // 후광 점들
+    const n = b.lights.length;
+    const pos = new Float32Array(n * 3), col = new Float32Array(n * 3), size = new Float32Array(n), flick = new Float32Array(n);
+    const c = new THREE.Color();
+    b.lights.forEach((l, i) => {
+      pos.set([l.x, l.y, l.z], i * 3);
+      c.set(l.color).toArray(col, i * 3);
+      size[i] = l.size;
+      flick[i] = l.flicker;
+    });
+    const haloGeo = new THREE.BufferGeometry();
+    haloGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    haloGeo.setAttribute("aColor", new THREE.BufferAttribute(col, 3));
+    haloGeo.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
+    haloGeo.setAttribute("aFlick", new THREE.BufferAttribute(flick, 1));
+    return { meshes: b.build(), halo: haloGeo };
   }, [bottom]);
+  useEffect(
+    () => () => {
+      meshes.forEach((m) => m.geo.dispose());
+      halo.dispose();
+    },
+    [meshes, halo],
+  );
 
-  useEffect(() => () => meshes.forEach((m) => m.geo.dispose()), [meshes]);
+  // 밤 조명: 창·전구 발광은 하루 주기를 따른다 (켜짐 0 → 1 은 dayCycle 키프레임이 40분 넘게 페이드)
+  useFrame((state) => {
+    const lamp = ENV.uLamp.value;
+    MATS.glass.emissiveIntensity = lamp * 1.5;
+    MATS.bulb.emissiveIntensity = lamp * 2.2;
+    haloPts.current.visible = lamp > 0.001; // 낮엔 후광 드로우를 뺀다 (두 패스 모두)
+    const u = HALO_MAT.uniforms;
+    u.uTime.value = state.clock.elapsedTime;
+    u.uPx.value = state.size.height * state.viewport.dpr * 0.5 * state.camera.projectionMatrix.elements[5];
+  });
 
   return (
     <>
       {meshes.map((m) => (
         <mesh key={m.bucket} geometry={m.geo} material={MATS[m.bucket]} />
       ))}
+      <points ref={haloPts} geometry={halo} material={HALO_MAT} frustumCulled={false} renderOrder={5} />
     </>
   );
 }
