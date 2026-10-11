@@ -11,8 +11,8 @@ interface Bump {
   k: 2 | 4;
 }
 
-/** 맵 배율 — 레이아웃 좌표는 10×8 기준으로 적고 S 로 늘린다 */
-export const S = 1.5;
+/** 맵 배율 — 레이아웃 좌표는 10×8 기준으로 적고 S 로 늘린다 (1.7 → 17×13.6, lagoonNav.TANK 와 같이 바꾼다). 소품·생물 크기는 절대 단위라 안 커진다 */
+export const S = 1.7;
 const BUMPS: Bump[] = (
   [
     // amp 는 SMOOTH*ln(개수) ≈ 0.35 만큼 깎여 나온다 (log-sum-exp 의 바닥 보정)
@@ -44,11 +44,13 @@ export function floorHeight(bottom: number, x: number, z: number) {
 }
 
 /** 산호 군락 자리 (Reef.tsx 가 심고, 큰 생물은 피한다). r 은 산호가 깔리는 반경, maxH 는 산호 최대 높이 */
-export const REEF_SITES = [
-  { id: "sandbar", x: 3.4, z: 3.8, r: 1.15, maxH: 0.42, seed: 11 }, // 앞 모래톱 (수심 ≈ 1.8)
-  { id: "shore", x: -0.9, z: 0.2, r: 0.85, maxH: 0.55, seed: 23 }, // 섬 앞 여울 (수심 ≈ 1.0)
-  { id: "deep", x: -5.2, z: 3.2, r: 0.9, maxH: 0.42, seed: 37 }, // 왼쪽 앞 깊은 물 (수심 ≈ 2.5)
-] as const;
+export const REEF_SITES = (
+  [
+    { id: "sandbar", x: 2.27, z: 2.53, r: 1.15, maxH: 0.42, seed: 11 }, // 앞 모래톱 (수심 ≈ 1.7)
+    { id: "shore", x: -0.6, z: 0.13, r: 0.85, maxH: 0.55, seed: 23 }, // 섬 앞 여울 (수심 ≈ 1.5)
+    { id: "deep", x: -3.47, z: 2.13, r: 0.9, maxH: 0.42, seed: 37 }, // 왼쪽 앞 깊은 물 (수심 ≈ 2.5)
+  ] as const
+).map((r) => ({ ...r, x: r.x * S, z: r.z * S }));
 export type ReefSite = (typeof REEF_SITES)[number];
 
 /** 큰 생물이 피해야 할 영역: 섬(원) · 산호 군락(원) · 방갈로 구역(사각형) */

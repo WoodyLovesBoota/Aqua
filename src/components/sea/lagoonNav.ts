@@ -3,8 +3,9 @@ import { floorHeight, NO_GO, NO_GO_CIRCLES } from "./lagoonHeight";
 
 /** 수조(라군) 치수: 젤리 블록 같은 둥근 라군. 생물 AI·그림자·소품이 함께 쓴다 */
 export const TANK = {
-  W: 15,
-  D: 12,
+  W: 17, // = 10 × lagoonHeight.S
+  D: 13.6, // = 8 × S
+
   TOP: 0,
   BOTTOM: -2.8,
 } as const;
@@ -44,8 +45,13 @@ export function pushAway(x: number, z: number, to: THREE.Vector3, k = 1.5) {
     pz += dz * w;
     wsum += w;
   }
-  to.x += (px / wsum) * k;
-  to.z += (pz / wsum) * k;
+  let ux = px / wsum, uz = pz / wsum;
+  // 벽 쪽으로 미는 성분은 소용없다 — 벽 클램프 ↔ 금지원 되밀기가 상쇄돼 그 자리에서 조향만 프레임마다 뒤집힌다
+  // (앞 모래톱 산호 원이 앞 벽과 겹치는 구석에서 돌고래가 20초 머물던 문제). 그 축을 빼고 벽을 따라 미끄러진다
+  if (Math.abs(x) > BOUNDS.x - 0.6 && Math.sign(ux) === Math.sign(x)) ux = 0;
+  if (Math.abs(z) > BOUNDS.z - 0.6 && Math.sign(uz) === Math.sign(z)) uz = 0;
+  to.x += ux * k;
+  to.z += uz * k;
   to.y += 0.6;
 }
 
@@ -178,6 +184,8 @@ export interface NavAgent {
   turnRate: number;
   /** 제자리에 갇힌 누적 시간(초) — navStep 이 관리한다 */
   stuck?: number;
+  /** 안전망이 잡은 탈출 목표를 지키는 남은 시간(초) — 그동안은 전방 탐지·벽 접촉으로 목표를 갈아타지 않는다 (돌아서는 데 1~2초가 든다) */
+  escape?: number;
 }
 
 export interface NavStepOpts {
@@ -222,14 +230,20 @@ export function maybeRetarget(a: NavAgent, dt: number, p: NavParams, yMin: numbe
  */
 export function navStep(a: NavAgent, dt: number, p: NavParams, o: NavStepOpts, tmp: NavTemps): { floorY: number; shallowBlocked: boolean } {
   const to = tmp.v.copy(a.target).sub(a.pos);
+  const escaping = (a.escape ?? 0) > 0;
+  if (escaping) a.escape! -= dt;
   const fx = Math.cos(a.yaw), fz = -Math.sin(a.yaw);
   const probeY = Math.min(a.pos.y, TANK.TOP - 0.3);
-  for (const ahead of p.lookahead) {
-    const ax = a.pos.x + fx * ahead, az = a.pos.z + fz * ahead;
-    if (blocked(ax, probeY, az, p.margin, p.clearance)) {
-      pushAway(ax, az, to, p.pushK);
-      a.retarget = Math.min(a.retarget, 0.5);
-      break;
+  // 탈출 중엔 전방 회피를 쉰다 — 탈출 목표가 이미 금지 원에서 멀어지는 쪽이고, 밀어내기는 돌아서는 조향을 매 프레임 되돌린다
+  // (얕은 바닥 정지·금지 구역 되밀기 안전망은 그대로 작동한다)
+  if (!escaping) {
+    for (const ahead of p.lookahead) {
+      const ax = a.pos.x + fx * ahead, az = a.pos.z + fz * ahead;
+      if (blocked(ax, probeY, az, p.margin, p.clearance)) {
+        pushAway(ax, az, to, p.pushK);
+        a.retarget = Math.min(a.retarget, 0.5);
+        break;
+      }
     }
   }
   if (o.avoidOthers !== false) {
@@ -275,19 +289,41 @@ export function navStep(a: NavAgent, dt: number, p: NavParams, o: NavStepOpts, t
   const targetBeyondWall = () =>
     (Math.abs(a.pos.x) >= bx && Math.sign(a.target.x) === Math.sign(a.pos.x) && Math.abs(a.target.x) > bx - 0.8) ||
     (Math.abs(a.pos.z) >= bz && Math.sign(a.target.z) === Math.sign(a.pos.z) && Math.abs(a.target.z) > bz - 0.8);
-  if (resolveNoGo(a.pos, p.margin, p.clearance) > 0 && targetBlocked()) a.retarget = 0;
+  if (resolveNoGo(a.pos, p.margin, p.clearance) > 0 && !escaping && targetBlocked()) a.retarget = 0;
   const floorY = floorHeight(TANK.BOTTOM, a.pos.x, a.pos.z);
   a.pos.y = THREE.MathUtils.clamp(a.pos.y, Math.max(p.yFloor, floorY + p.clearance * 0.8), o.yCeil);
-  if (o.wallRetarget !== false && (Math.abs(a.pos.x) >= bx || Math.abs(a.pos.z) >= bz) && (targetBlocked() || targetBeyondWall())) {
+  if (o.wallRetarget !== false && !escaping && (Math.abs(a.pos.x) >= bx || Math.abs(a.pos.z) >= bz) && (targetBlocked() || targetBeyondWall())) {
     randomTarget(a.target, p.margin, o.yMin, o.yMax, p.clearance).multiplyScalar(0.5);
     a.retarget = rand(p.retargetRange);
   }
-  // 안전망: 가려는데 1.5초 넘게 제자리면(클램프·되밀기가 서로 상쇄) 열린 앞바다를 목표로 잡고 빠져나온다
+  // 안전망: 가려는데 1.5초 넘게 제자리면(클램프·되밀기가 서로 상쇄) 빠져나올 목표를 잡는다.
+  // 금지 원에 붙어 있으면 그 원에서 멀어지는 쪽으로(벽에 붙었으면 벽을 따라) — 원과 벽이 만나는 교점에선 그쪽이 유일한 출구다
+  // (열린 앞바다 목표는 보통 원 너머라 되밀기와 상쇄돼 영영 못 나갔다). 원이 없으면 열린 앞바다.
   const moved = Math.hypot(a.pos.x - px, a.pos.z - pz);
   a.stuck = moved < a.speed * dt * 0.25 && a.speed > 0.05 ? (a.stuck ?? 0) + dt : 0;
   if (a.stuck > 1.5) {
-    a.target.set(THREE.MathUtils.randFloat(-1, 2.5), THREE.MathUtils.clamp(a.target.y, o.yMin, o.yMax), THREE.MathUtils.randFloat(1, 3.5));
+    let ex = 0, ez = 0, best = 1.0;
+    for (const c of NO_GO_CIRCLES) {
+      // blocked/resolveNoGo 와 같은 규칙: 산호 원은 clearance < 1 종만 보고 여유는 REEF_MARGIN 까지
+      // (고래상어가 자기와 무관한 산호 원을 '가장 가까운 원'으로 골라 섬 쪽으로 탈출하려다 더 박히던 문제)
+      const isReef = c !== NO_GO.island;
+      if (isReef && p.clearance >= REEF_CLEARANCE) continue;
+      const dx = a.pos.x - c.x, dz = a.pos.z - c.z;
+      const gap = Math.hypot(dx, dz) - c.r - (isReef ? Math.min(p.margin, REEF_MARGIN) : p.margin);
+      if (gap < best) {
+        best = gap;
+        ex = dx;
+        ez = dz;
+      }
+    }
+    if (Math.abs(a.pos.x) >= bx - 0.2) ex = 0;
+    if (Math.abs(a.pos.z) >= bz - 0.2) ez = 0;
+    const n = Math.hypot(ex, ez);
+    const y = THREE.MathUtils.clamp(a.target.y, o.yMin, o.yMax);
+    if (n > 0.1) a.target.set(THREE.MathUtils.clamp(a.pos.x + (ex / n) * 4, -bx * 0.9, bx * 0.9), y, THREE.MathUtils.clamp(a.pos.z + (ez / n) * 4, -bz * 0.9, bz * 0.9));
+    else a.target.set(THREE.MathUtils.randFloat(-1, 2.5), y, THREE.MathUtils.randFloat(1, 3.5));
     a.retarget = rand(p.retargetRange);
+    a.escape = 1.5 + Math.PI / p.maxTurn; // 돌아서는 데 드는 시간 + 여유 (고래상어처럼 느리게 도는 종은 더 길게)
     a.stuck = 0;
   }
 

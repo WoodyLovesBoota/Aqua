@@ -33,3 +33,9 @@ function run(b: Behaviour, pos: [number, number, number], yaw: number, target: [
 run(dolphin as Behaviour, [-6.43, -0.25, 0.38], Math.PI, [2, -1, 3]);
 run(manta as Behaviour, [0.06, -0.5, 0.85], Math.PI / 2, [-3, -1.2, -3]);
 run(whaleshark as Behaviour, [6.4, -0.55, 0.75], -0.3, [4, -0.6, -2]);
+// 맵 17×13.6 에서 소크가 한 번 잡은 자리: 앞 모래톱 산호 원 + 앞 벽 사이 구석에서 돌고래가 20초 머묾 (2026-10-11). 구석을 보고 시작해 빠져나오는지
+run(dolphin as Behaviour, [4.82, -0.79, 5.94], -Math.PI / 2 + 0.3, [6.5, -0.8, 6.5]);
+run(dolphin as Behaviour, [6.2, -0.8, 5.5], -Math.PI / 2, [7, -0.8, 6]);
+// 맵 17×13.6 소크: 고래상어가 왼쪽 벽 × 섬 금지원 교점에 20초 머묾 (2026-10-11)
+run(whaleshark as Behaviour, [-6.61, -1.02, 1.6], Math.PI + 0.6, [-2, -1, -4], 20);
+run(whaleshark as Behaviour, [-6.61, -1.02, 1.6], Math.PI / 2 + 0.3, [-6, -1, -5], 20);

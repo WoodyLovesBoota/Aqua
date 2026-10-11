@@ -11,7 +11,7 @@ const errs = [];
 page.on("pageerror", (e) => errs.push(e.message));
 await page.goto(base + route + (route.includes("?") ? "&" : "?") + "debug", { waitUntil: "networkidle" });
 await page.waitForTimeout(3000);
-const TANK = { x: 15 / 2 - 1.2 + 0.3, z: 12 / 2 - 1.0 + 0.3, yMin: -2.8, yMax: 0.6 }; // lagoonNav.BOUNDS + 여유 (돌고래 점프는 수면 위)
+const TANK = { x: 17 / 2 - 1.2 + 0.3, z: 13.6 / 2 - 1.0 + 0.3, yMin: -2.8, yMax: 0.6 }; // lagoonNav.BOUNDS(TANK 17×13.6) + 여유 (돌고래 점프는 수면 위)
 const SCREEN = { nx: 1.08, nyMin: -0.7, nyMax: 0.95 }; // StudioScene.LIMIT + 여유
 const hist = {};
 const problems = [];
