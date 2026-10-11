@@ -106,8 +106,12 @@ function Scene({ creatures, flavour, onReady }: Props) {
   const { camera, gl } = useThree();
   const sharkRoot = useRef<THREE.Group>(null!);
   const shadow = useRef<THREE.Mesh>(null!);
-  // 블록 전체 그룹(행렬은 useFrame 이 합성해 직접 쓴다) + 흔들림 상태
-  const block = useRef<THREE.Group>(null!);
+  // 블록 전체 그룹(행렬은 useFrame 이 합성해 직접 쓴다) + 흔들림 상태. 안정된 객체로 두어 LagoonDay 가 하늘 돔(뚜껑)을 이 안에 포털로 넣는다
+  const block = useMemo(() => {
+    const g = new THREE.Group();
+    g.matrixAutoUpdate = false;
+    return g;
+  }, []);
   // grabbing/px/py: 잡은 화면 좌표, tx/tz: 전단 목표, sx/sz: 전단(높이당 변위), vx/vz: 전단 속도, bx/bz: 바닥 변위(목표 btx/btz)
   const jelly = useRef({ grabbing: false, px: 0, py: 0, tx: 0, tz: 0, sx: 0, sz: 0, vx: 0, vz: 0, btx: 0, btz: 0, bx: 0, bz: 0 });
   const bubbles = useRef<THREE.InstancedMesh>(null!);
@@ -413,8 +417,8 @@ function Scene({ creatures, flavour, onReady }: Props) {
       m.multiply(tmp.m2.makeScale(1 + q * 0.5, 1 - q, 1 + q * 0.5));
       m.multiply(tmp.m2.makeShear(j.sx, 0, 0, 0, 0, j.sz)); // x += sx·y, z += sz·y (y 는 바닥 기준)
       m.multiply(tmp.m2.makeTranslation(0, -BLOCK_BOTTOM, 0));
-      block.current.matrix.copy(m);
-      block.current.matrixWorldNeedsUpdate = true;
+      block.matrix.copy(m);
+      block.matrixWorldNeedsUpdate = true;
       if (DEBUG_ON) publishDebug("jelly", { sx: +j.sx.toFixed(4), sz: +j.sz.toFixed(4), bx: +j.bx.toFixed(3), bz: +j.bz.toFixed(3), q: +q.toFixed(4), grabbing: j.grabbing });
     }
     // 수면 시뮬: 누르고 있는 동안 그 자리를 손가락처럼 눌러 그릇을 유지한다 (떼면 되튀어 링이 퍼진다)
@@ -603,11 +607,11 @@ function Scene({ creatures, flavour, onReady }: Props) {
 
   return (
     <ExtraTargets.Provider value={extraTargets}>
-      {/* 하루 주기: 하늘·해·달·별·조명 (실제 1시간 = 24시간) */}
-      <LagoonDay />
+      {/* 하루 주기: 하늘·해·달·별·조명 (실제 1시간 = 24시간). 하늘 돔(뚜껑)은 블록 그룹 안에 들어가 젤리와 함께 흔들린다 */}
+      <LagoonDay jelly={block} />
 
       {/* 블록 전체: 아래 지층·모래를 잡고 흔들면 푸딩처럼 전단·스쿼시로 출렁인다 (행렬은 useFrame 이 직접 쓴다) */}
-      <group ref={block} matrixAutoUpdate={false}>
+      <primitive object={block}>
       {/* 지층 */}
       <mesh geometry={strataGeo} material={strataMat} />
       {/* 지층 잡기용 히트 박스 (레이캐스트는 박스 12 tri 만) */}
@@ -676,7 +680,7 @@ function Scene({ creatures, flavour, onReady }: Props) {
       >
         <planeGeometry args={[W, D]} />
       </mesh>
-      </group>
+      </primitive>
       {simDebugMat && (
         <mesh material={simDebugMat} frustumCulled={false} renderOrder={1000}>
           <planeGeometry args={[2, 2]} />

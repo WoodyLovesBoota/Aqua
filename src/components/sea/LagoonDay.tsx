@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/immutability -- three.js 객체는 프레임마다 직접 변경한다 */
 "use client";
 
-import { useFrame, useThree } from "@react-three/fiber";
+import { createPortal, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { captureParam, DEBUG_ON, publishDebug } from "@/components/creature/debugProbe";
@@ -85,7 +85,12 @@ function arcPos(a: number, out: THREE.Vector3) {
  * 젤리 하늘 돔(해·달·별빛·낮 구름)을 갱신한다. 화면 배경은 건드리지 않는다.
  * 라이트 개수는 고정이고 색·세기·방향만 바꾼다 (개수가 바뀌면 모든 재질이 다시 컴파일된다).
  */
-export function LagoonDay() {
+interface Props {
+  /** 젤리 블록 그룹 — 주면 하늘 돔(뚜껑)·해·달·별·구름을 이 안에 넣어 블록을 흔들 때 뚜껑도 같이 전단·기울임을 받는다 (조명은 바깥에 남는다) */
+  jelly?: THREE.Object3D;
+}
+
+export function LagoonDay({ jelly }: Props) {
   const { camera } = useThree();
   const hemi = useRef<THREE.HemisphereLight>(null!);
   const key = useRef<THREE.DirectionalLight>(null!);
@@ -218,20 +223,24 @@ export function LagoonDay() {
     if (DEBUG_ON) publishDebug("day", { hour: +d.hour.toFixed(4), sunElev: +d.sunElev.toFixed(3), moonElev: +d.moonElev.toFixed(3), lamp: +d.lamp.toFixed(3), stars: +d.stars.toFixed(3) });
   });
 
+  // 젤리 하늘 돔과 그 안의 해·달·별빛·구름 (레이어 1 — 굴절 패스에선 빠진다). 먼 벽 → 해·달 → 별 → 앞 유리 순
+  // 해·달·구름 빌보드는 카메라 쿼터니언을 로컬로 받으니 블록이 전단되면 살짝 같이 찌그러진다 — 젤리 속 장난감이라 그게 맞다
+  const skyNode = (
+    <group ref={sky} visible={!SKY_OFF}>
+      <mesh geometry={res.domeGeo} material={res.domeBack} renderOrder={2} />
+      <instancedMesh ref={clouds} args={[res.cloudGeo, res.cloudMat, CLOUDS.length]} frustumCulled={false} />
+      <mesh ref={sun} geometry={res.orbGeo} material={res.sunMat} renderOrder={3} frustumCulled={false} />
+      <mesh ref={moon} geometry={res.orbGeo} material={res.moonMat} renderOrder={3} frustumCulled={false} />
+      <points ref={starPts} geometry={res.starGeo} material={res.starMat} renderOrder={4} frustumCulled={false} />
+      <mesh geometry={res.domeGeo} material={res.domeFront} renderOrder={20} />
+    </group>
+  );
   return (
     <>
       <hemisphereLight ref={hemi} args={["#ffffff", "#8fa5b8", 1.0]} />
       <directionalLight ref={key} position={[3, 6, 2]} intensity={1.5} />
       <directionalLight ref={fill} position={[-4, 2, -3]} intensity={0.35} color="#cfe6ff" />
-      {/* 젤리 하늘 돔과 그 안의 해·달·별빛·구름 (레이어 1 — 굴절 패스에선 빠진다). 먼 벽 → 해·달 → 별 → 앞 유리 순 */}
-      <group ref={sky} visible={!SKY_OFF}>
-        <mesh geometry={res.domeGeo} material={res.domeBack} renderOrder={2} />
-        <instancedMesh ref={clouds} args={[res.cloudGeo, res.cloudMat, CLOUDS.length]} frustumCulled={false} />
-        <mesh ref={sun} geometry={res.orbGeo} material={res.sunMat} renderOrder={3} frustumCulled={false} />
-        <mesh ref={moon} geometry={res.orbGeo} material={res.moonMat} renderOrder={3} frustumCulled={false} />
-        <points ref={starPts} geometry={res.starGeo} material={res.starMat} renderOrder={4} frustumCulled={false} />
-        <mesh geometry={res.domeGeo} material={res.domeFront} renderOrder={20} />
-      </group>
+      {jelly ? createPortal(skyNode, jelly) : skyNode}
     </>
   );
 }
