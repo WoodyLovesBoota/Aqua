@@ -3,7 +3,7 @@ import { floorHeight, NO_GO, NO_GO_CIRCLES } from "./lagoonHeight";
 
 /** 수조(라군) 치수: 젤리 블록 같은 둥근 라군. 생물 AI·그림자·소품이 함께 쓴다 */
 export const TANK = {
-  W: 17, // = 10 × lagoonHeight.S
+  W: 20, // 데스크톱 화면비에 맞춰 가로만 넓힘 (레이아웃은 10 × lagoonHeight.S = 17 기준 그대로 — 양옆이 열린 물)
   D: 13.6, // = 8 × S
 
   TOP: 0,

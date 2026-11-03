@@ -5,15 +5,15 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { captureParam, DEBUG_ON, publishDebug } from "@/components/creature/debugProbe";
+import { floorHeight } from "./lagoonHeight";
 import { blobShadowTexture, TANK } from "./lagoonNav";
-import { BLOCK_CORNER } from "./tankGeometry";
 import { makeSeaplaneGeometry, makeSeaplaneMaterial, PROP_HUB } from "./seaplaneModel";
 import { CIRCUIT, makeCircuit, PARK, type Phase } from "./seaplanePath";
 
 /**
- * 해상 비행기 — 블록 바깥 상공에서 들어와 앞바다에 착수 → 활주 → 이륙 → 블록 바깥을 한 바퀴 선회를 반복한다 (aquamodel.mov 참고).
+ * 해상 비행기 — 젤리 뚜껑(돔) 안에서 앞바다에 착수 → 활주 → 이륙 → 앞바다 위를 한 바퀴 선회를 반복한다 (aquamodel.mov 참고).
  * 경로는 닫힌 스플라인(seaplanePath), 모델은 정점 색 1 메시(seaplaneModel — 프로펠러·항법등은 정점 셰이더).
- * 물 위에선 블록 흔들림(전단·바닥 변위)을 따라가고 공중에선 따라가지 않는다.
+ * 블록 그룹 안에 있으므로 블록을 흔들면 뚜껑·수면과 함께 흔들린다.
  * ?plane=off 끄기 · ?plane=park 활주로 정지 · ?plane=<초> 경로 시작 위상 · ?focus=plane 근접 뷰 (점검용)
  */
 const PLANE_PARAM = captureParam("plane") ?? "";
@@ -25,30 +25,19 @@ const START_ADVANCE = Number(PLANE_PARAM) || 0;
 export const PLANE_FOCUS = { pos: new THREE.Vector3(PARK.x, TANK.TOP + 0.3, PARK.z), yaw: PARK.yaw };
 
 const WAKE_EVERY = 0.2; // 활주 중 플로트 파임 간격 (초)
-const FOLLOW_H = 0.8; // 이 고도까지 블록 흔들림을 따라간다 (0 에서 완전히, FOLLOW_H 에서 0)
 const PITCH_K = 0.5; // 경로 기울기 → 자세 피치 비율 (장난감답게 완만히, 나머지는 플레어·회전 보정)
 const BANK = { k: 0.45, max: 0.55, rate: 3 }; // 요 각속도 → 롤
 // 그림자가 밀리는 방향 (높이 1당) — Shadows.tsx 의 블록 그림자와 같은 빛 방향
 const SHADOW_OFF = { x: 0.5, z: 0.14 };
-const HX = TANK.W / 2, HZ = TANK.D / 2;
-/** 블록 발자국(둥근 사각형) 안인지 */
-const inFootprint = (x: number, z: number) => {
-  const dx = Math.max(Math.abs(x) - (HX - BLOCK_CORNER), 0), dz = Math.max(Math.abs(z) - (HZ - BLOCK_CORNER), 0);
-  return Math.hypot(dx, dz) - BLOCK_CORNER < -0.1;
-};
 
 interface Props {
-  /** 젤리 블록 그룹 — 물 위에 있을 때 이 행렬을 따라간다 */
-  jelly: THREE.Object3D;
-  /** 종이 바닥 높이 (블록 밑면) — 블록 밖 그림자가 떨어지는 곳 */
-  groundY: number;
   /** 착수·이륙 물보라 */
   onSplash?: (x: number, z: number, strength: number) => void;
   /** 활주 항적 (수면 시뮬 임펄스) */
   onWake?: (x: number, z: number, radius: number, strength: number) => void;
 }
 
-export function Seaplane({ jelly, groundY, onSplash, onWake }: Props) {
+export function Seaplane({ onSplash, onWake }: Props) {
   const root = useRef<THREE.Group>(null!);
   const shadow = useRef<THREE.Mesh>(null!);
   const res = useMemo(() => ({ geo: makeSeaplaneGeometry(), mat: makeSeaplaneMaterial(), circuit: makeCircuit(), shadowTex: blobShadowTexture() }), []);
@@ -136,11 +125,7 @@ export function Seaplane({ jelly, groundY, onSplash, onWake }: Props) {
         }
       }
     }
-    // 물 위에선 블록 행렬을 따라간다 (고도 0 → FOLLOW_H 로 블렌드)
-    tmp.v.set(a.raw.x, TANK.TOP + a.raw.y, a.raw.z);
-    const k = THREE.MathUtils.clamp(1 - alt / FOLLOW_H, 0, 1);
-    a.pos.copy(tmp.v);
-    if (k > 0) a.pos.lerp(tmp.v.applyMatrix4(jelly.matrix), k);
+    a.pos.set(a.raw.x, TANK.TOP + a.raw.y, a.raw.z);
     const g = root.current;
     g.position.copy(a.pos);
     if (onWater) g.position.y += Math.sin(t * 1.4) * 0.006;
@@ -149,25 +134,19 @@ export function Seaplane({ jelly, groundY, onSplash, onWake }: Props) {
     a.prop += dt * (a.speed > 0.2 ? 40 : 12);
     res.mat.u.uProp.value = a.prop;
     res.mat.u.uHub.value.copy(PROP_HUB);
-    // 그림자: 빛 반대쪽으로 고도만큼 밀린 자리가 블록 발자국 안이면 수면 위(블록 행렬 따라감), 밖이면 종이 바닥 위
+    // 그림자: 빛 반대쪽으로 고도만큼 밀린 수면(섬이면 모래) 위
     {
       const sh = shadow.current;
       // 동체는 플로트보다 0.45 위에 있다 — 물 위에서도 그림자가 몸 옆으로 살짝 비켜 보이게
-      let h = alt + 0.45;
-      let sx = a.raw.x + SHADOW_OFF.x * h, sz = a.raw.z + SHADOW_OFF.z * h;
-      const onBlock = inFootprint(sx, sz);
-      if (!onBlock) {
-        h = alt + (TANK.TOP - groundY);
-        sx = a.raw.x + SHADOW_OFF.x * h;
-        sz = a.raw.z + SHADOW_OFF.z * h;
-      }
-      tmp.v.set(sx, onBlock ? TANK.TOP + 0.012 : groundY + 0.004, sz);
-      if (onBlock) tmp.v.applyMatrix4(jelly.matrix);
-      sh.position.copy(tmp.v);
+      const h = alt + 0.45;
+      // 벽 너머로 밀리면 수면 밖(옆면 속)에 얼룩처럼 보이니 수면 안쪽으로 묶는다
+      const sx = THREE.MathUtils.clamp(a.raw.x + SHADOW_OFF.x * h, -TANK.W / 2 + 0.9, TANK.W / 2 - 0.9);
+      const sz = THREE.MathUtils.clamp(a.raw.z + SHADOW_OFF.z * h, -TANK.D / 2 + 0.9, TANK.D / 2 - 0.9);
+      sh.position.set(sx, Math.max(TANK.TOP, floorHeight(TANK.BOTTOM, sx, sz)) + 0.012, sz);
       sh.rotation.set(-Math.PI / 2, 0, -a.yaw, "XYZ"); // 공유 Euler 는 매번 순서를 명시한다
       const grow = 1 + Math.min(h, 6) * 0.14;
       sh.scale.set(1.5 * grow, 1.1 * grow, 1);
-      (sh.material as THREE.MeshBasicMaterial).opacity = THREE.MathUtils.lerp(1.0, 0.3, Math.min(1, h / 6));
+      (sh.material as THREE.MeshBasicMaterial).opacity = THREE.MathUtils.lerp(0.75, 0.2, Math.min(1, h / 3.5));
     }
     PLANE_FOCUS.pos.copy(a.pos);
     PLANE_FOCUS.yaw = a.yaw;
@@ -182,7 +161,6 @@ export function Seaplane({ jelly, groundY, onSplash, onWake }: Props) {
         pitch: +a.pitch.toFixed(3),
         roll: +a.roll.toFixed(3),
         speed: +a.speed.toFixed(2),
-        render: a.pos.toArray().map((v) => +v.toFixed(3)),
       });
   });
 
@@ -191,7 +169,7 @@ export function Seaplane({ jelly, groundY, onSplash, onWake }: Props) {
       <group ref={root}>
         <mesh geometry={res.geo} material={res.mat.mat} frustumCulled={false} />
       </group>
-      {/* 블롭 그림자 (수면 또는 종이 위, 블록 그림자 뒤에 그린다) */}
+      {/* 블롭 그림자 (수면 또는 섬 모래 위) */}
       <mesh ref={shadow} renderOrder={1} frustumCulled={false}>
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial map={res.shadowTex} transparent depthWrite={false} />

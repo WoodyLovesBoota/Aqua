@@ -7,8 +7,8 @@ import * as THREE from "three";
  * 입력 두 종류: 임펄스(한 번 일어나는 사건 — 큐에 쌓였다가 다음 스텝에 들어간다)와 누름(유지되는 상태 — 매 스텝 적용).
  * 아무 입력 없이 WAKE_S 가 지나면 잠들어 스텝을 돌리지 않는다 (잔여 진폭 < 1%).
  */
-export const SIM_W = 256;
-export const SIM_H = 208; // 수조 17×13.6 비례 (셀 ≈ 0.066)
+export const SIM_W = 306;
+export const SIM_H = 208; // 수조 20×13.6 비례 (셀 ≈ 0.065)
 export const SIM_TEXEL = new THREE.Vector2(1 / SIM_W, 1 / SIM_H);
 export const MAX_IMPULSES = 8;
 export const STEP_HZ = 90; // 젤리처럼 느리게 번진다 (c 0.9 → ≈ 2.5 u/s)

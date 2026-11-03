@@ -15,27 +15,37 @@ interface Knot {
   phase: Phase; // 이 점부터 다음 점까지의 구간 이름
 }
 
-const HX = TANK.W / 2; // 8.5
+const HX = TANK.W / 2;
 export const RUNWAY_Z = 1.85; // 섬 앞 산호 원(+0.3)·앞 모래톱 산호·정적 보트(3.9, 2.9)·방갈로 구역 사이의 열린 물
-/** 조종점. x 는 ±14 안(데스크톱 프레임 가장자리), 뒤쪽 선회는 돔(높이 4) 위 고도 5~6 */
+/**
+ * 젤리 뚜껑(돔: 반폭 HX·반깊이 6.8·높이 4) 안에서만 난다. 앞바다 위 경주로 모양 한 바퀴:
+ * 활주로(z 1.85, −x 방향) → 왼쪽 반원 선회 상승 → 앞쪽 직선(z 5.0, +x, 고도 ≈ 2.5) → 오른쪽 반원 선회 강하 → 착수.
+ * 반원은 반지름 1.575(z 1.85 ↔ 5.0) — 날개 반폭 0.75 까지 벽에서 0.4 이상 떨어지게 중심을 벽에서 2.9 안쪽에 둔다.
+ * 섬 야자수(관 높이 ≤ 3.1)·방갈로는 전부 z < 0 이라 경로(z ≥ 1.85)와 만나지 않는다.
+ */
+const TR = 1.575;
+const TZ = RUNWAY_Z + TR; // 반원 중심 z
+const D45 = TR * Math.SQRT1_2;
+const LX = -(HX - 2.9), RX = HX - 2.9; // 왼쪽·오른쪽 반원 중심 x
+const OUT_Z = RUNWAY_Z + 2 * TR; // 앞쪽 직선 z
 export const CIRCUIT: Knot[] = [
-  // 오른쪽 바깥 사분원(중심 11,−1.1 · 반지름 3.5): +z 방향으로 들어와 활주로 연장선(z ≈ 2.4)에 −x 방향으로 정렬된다
-  { p: [14.5, 2.6, -1.1], v: 3.0, phase: "approach" },
-  { p: [14.03, 2.2, 0.65], v: 2.8, phase: "approach" },
-  { p: [12.75, 1.6, 1.93], v: 2.6, phase: "approach" },
-  { p: [11.0, 1.0, 2.4], v: 2.4, phase: "approach" }, // 최종 진입 (돔 앞 오른쪽 벽을 통과)
-  { p: [7.6, 0.3, RUNWAY_Z + 0.15], v: 2.0, pitch: 0.18, phase: "approach" }, // 플레어 (기수 들기)
-  { p: [5.6, 0, RUNWAY_Z], v: 1.6, pitch: 0.08, phase: "taxi" }, // 착수
-  { p: [2.0, 0, RUNWAY_Z], v: 1.0, phase: "taxi" },
-  { p: [-1.5, 0, RUNWAY_Z], v: 0.9, phase: "takeoff" }, // 활주 끝 → 가속
-  { p: [-4.6, 0.1, RUNWAY_Z], v: 1.7, pitch: 0.2, phase: "takeoff" }, // 이륙 회전
-  { p: [-HX - 1.2, 1.2, 1.4], v: 2.4, pitch: 0.1, phase: "climb" }, // 왼쪽 벽 너머 상승
-  { p: [-13.5, 2.6, -1.5], v: 2.8, phase: "loop" }, // 왼쪽 바깥 (NDC ≈ −0.72, 0.78)
-  { p: [-12.0, 3.2, -6.2], v: 2.9, phase: "loop" },
-  { p: [-5.5, 3.5, -8.8], v: 2.9, phase: "loop" }, // 블록 뒤 (돔 뒤 벽 너머, 화면 위 0.9 안)
-  { p: [3.5, 3.5, -8.9], v: 2.9, phase: "loop" },
-  { p: [10.0, 3.2, -6.0], v: 2.9, phase: "loop" },
-  { p: [13.2, 2.9, -3.6], v: 3.0, phase: "loop" }, // 오른쪽 바깥 → 사분원으로
+  { p: [3.5, 2.55, OUT_Z], v: 2.3, phase: "loop" }, // 앞쪽 직선 (카메라에 가장 가깝다)
+  { p: [RX, 2.35, OUT_Z], v: 2.2, phase: "approach" }, // 오른쪽 반원 — 선회하며 강하
+  { p: [RX + D45, 1.9, TZ + D45], v: 2.1, phase: "approach" },
+  { p: [RX + TR, 1.45, TZ], v: 2.0, phase: "approach" },
+  { p: [RX + D45, 1.05, TZ - D45], v: 1.9, phase: "approach" },
+  { p: [RX, 0.7, RUNWAY_Z], v: 1.8, phase: "approach" }, // 최종 진입
+  { p: [RX - 2.2, 0.25, RUNWAY_Z], v: 1.6, pitch: 0.18, phase: "approach" }, // 플레어 (기수 들기)
+  { p: [RX - 3.9, 0, RUNWAY_Z], v: 1.4, pitch: 0.08, phase: "taxi" }, // 착수
+  { p: [0.8, 0, RUNWAY_Z], v: 0.9, phase: "taxi" },
+  { p: [-2.0, 0, RUNWAY_Z], v: 0.9, phase: "takeoff" }, // 활주 끝 → 가속
+  { p: [LX + 2.6, 0.15, RUNWAY_Z], v: 1.6, pitch: 0.2, phase: "takeoff" }, // 이륙 회전
+  { p: [LX, 0.8, RUNWAY_Z], v: 1.9, pitch: 0.1, phase: "climb" }, // 왼쪽 반원 — 선회하며 상승
+  { p: [LX - D45, 1.3, TZ - D45], v: 2.0, phase: "climb" },
+  { p: [LX - TR, 1.8, TZ], v: 2.1, phase: "loop" },
+  { p: [LX - D45, 2.2, TZ + D45], v: 2.2, phase: "loop" },
+  { p: [LX, 2.45, OUT_Z], v: 2.3, phase: "loop" },
+  { p: [-1.0, 2.6, OUT_Z], v: 2.3, phase: "loop" },
 ];
 /** `?plane=park` 정지 자리 (활주로 가운데, 기수 −x) */
 export const PARK = { x: 0.5, z: RUNWAY_Z, yaw: Math.PI };

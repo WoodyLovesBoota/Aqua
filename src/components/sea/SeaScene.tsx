@@ -51,7 +51,7 @@ const CORNER = BLOCK_CORNER; // 둘레 모서리 반지름
 const SHARK_SCALE = 0.42; // 몸길이 ≈ 1.4 (돌고래 1.15 의 1.2배)
 const SHADOW_K = SHARK_SCALE / 0.66; // 그림자 크기는 0.66 기준으로 적어둔 값
 // 카메라: 디오라마처럼 위에서 비스듬히 내려다본다 (방위각·앙각 고정)
-const CAM = { az: 35, el: 34, r: 40, fov: 26, lookY: -1.3 }; // r 은 맵 17×13.6 + 뚜껑이 데스크톱 프레임에 들어오는 거리
+const CAM = { az: 35, el: 27, r: 40.5, fov: 26, lookY: -2.0 }; // 가로 20 블록 + 뚜껑이 데스크톱(16:10) 프레임을 가득 채우는 거리·앙각
 const CAM_AZ = THREE.MathUtils.degToRad(CAM.az);
 const CAM_EL = THREE.MathUtils.degToRad(CAM.el);
 // 카메라 기준 xz 축: 화면 오른쪽 / 카메라 뒤쪽(= 화면 아래, 가까운 쪽)
@@ -193,7 +193,7 @@ function Scene({ creatures, flavour, onReady }: Props) {
   }, []);
   // 모래 바닥: 높이맵으로 섬을 올린 격자 (둥근 둘레 바깥은 셰이더에서 버린다)
   const floorGeo = useMemo(() => {
-    const g = new THREE.PlaneGeometry(W, D, 120, 96);
+    const g = new THREE.PlaneGeometry(W, D, 141, 96);
     g.rotateX(-Math.PI / 2);
     const pos = g.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) pos.setY(i, floorHeight(BOTTOM, pos.getX(i), pos.getZ(i)));
@@ -449,7 +449,7 @@ function Scene({ creatures, flavour, onReady }: Props) {
     // 좁은 화면이면 뒤로 물러나 수조 폭을 다 담는다. 세로 화면은 대각선이 화면 폭의 ≈ 80% 가 되게 (0.46 이면 r ≈ 112 — far 는 이보다 커야 한다)
     const r = CAM.r * (aspect < 1 ? 1.4 / aspect : aspect < 1.6 ? 1.6 / aspect : 1);
     // 오른쪽 패널만큼 화면 오른쪽(카메라 right 벡터)으로 목표점을 옮겨 블록을 남은 영역 가운데에 둔다
-    const sx = aspect < 1 ? 0 : 0.9;
+    const sx = aspect < 1 ? 0 : 0.4;
     const tx = CAM_RIGHT.x * sx;
     const tz = CAM_RIGHT.z * sx;
     const back = Math.cos(CAM_EL) * r;
@@ -652,6 +652,8 @@ function Scene({ creatures, flavour, onReady }: Props) {
       <Reef bottom={BOTTOM} />
       <Resort bottom={BOTTOM} />
       {!GUESTS_OFF && <Guests bottom={BOTTOM} onSplash={splash} />}
+      {/* 수상기: 젤리 뚜껑 안 앞바다에서 착수·활주·이륙·선회 (블록과 함께 흔들린다) */}
+      {!PLANE_OFF && <Seaplane onSplash={splash} onWake={wake} />}
       <Shadows top={TOP} groundY={BOTTOM - STRATA_H} halfX={W / 2} halfZ={D / 2} corner={CORNER} />
 
       {/* 빛줄기 (6장 → 1 메시) */}
@@ -682,7 +684,7 @@ function Scene({ creatures, flavour, onReady }: Props) {
       {/* 물: 옆면 + 수면 */}
       <mesh geometry={sideGeo} material={sideMat} />
       <mesh ref={surfaceMesh} material={surfaceMat} position={[0, TOP, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[W, D, 150, 120]} />
+        <planeGeometry args={[W, D, 176, 120]} />
       </mesh>
       {/* 수면 포인터용 히트 평면 (레이캐스트는 2 tri 만 — 수면 메시 36k tri 를 매 이벤트 훑지 않는다) */}
       <mesh
@@ -697,8 +699,6 @@ function Scene({ creatures, flavour, onReady }: Props) {
         <planeGeometry args={[W, D]} />
       </mesh>
       </primitive>
-      {/* 수상기: 블록 바깥 상공을 돌다 앞바다에 착수·이륙 (물 위에선 블록 행렬을 따라간다 — 공중은 전단을 받지 않게 블록 밖에 둔다) */}
-      {!PLANE_OFF && <Seaplane jelly={block} groundY={BLOCK_BOTTOM} onSplash={splash} onWake={wake} />}
       {simDebugMat && (
         <mesh material={simDebugMat} frustumCulled={false} renderOrder={1000}>
           <planeGeometry args={[2, 2]} />

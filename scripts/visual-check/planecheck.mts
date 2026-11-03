@@ -1,4 +1,4 @@
-// 수상기 경로 단독 점검 (브라우저 없이): 물 위 구간이 금지 구역 밖인지, 공중 경로가 야자수·방갈로와 만나지 않는지, 한 바퀴 시간·최대 요 각속도.
+// 수상기 경로 단독 점검 (브라우저 없이): 경로가 젤리 뚜껑 안인지, 물 위 구간이 금지 구역 밖인지, 공중 경로가 야자수·방갈로와 만나지 않는지, 한 바퀴 시간·최대 요 각속도.
 // usage: pnpm check:plane  = node --experimental-strip-types --no-warnings --import ./scripts/ts-alias.mjs scripts/visual-check/planecheck.mts
 import * as THREE from "three";
 import { blocked, TANK } from "@/components/sea/lagoonNav";
@@ -29,6 +29,8 @@ for (let s = 0; s < c.length; s += STEP) {
     for (const pm of PALMS) if (Math.hypot(p.x - pm.x, p.z - pm.z) < 1.2 && p.y < 0.35 + pm.h + 0.6) problems.push(`palm hit at s=${s.toFixed(1)} y ${p.y.toFixed(2)} palm h ${pm.h}`);
     for (const b of BUNGALOWS) if (Math.hypot(p.x - b.x, p.z - b.z) < 1.0 && p.y < 0.9 + 0.3) problems.push(`bungalow hit at s=${s.toFixed(1)} y ${p.y.toFixed(2)}`);
   }
+  // 젤리 뚜껑(돔) 안: 날개 반폭 0.75 · 꼬리 높이 0.65 를 더해도 벽·천장(높이 4, 윗모서리 둥글림 0.6)에서 0.3 이상
+  if (Math.abs(p.x) + 0.75 > TANK.W / 2 - 0.3 || Math.abs(p.z) + 0.75 > TANK.D / 2 - 0.3 || p.y + 0.65 > 4.0 - 0.6) problems.push(`outside jelly dome at s=${s.toFixed(1)} ${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}`);
   const yaw = Math.atan2(-t.z, t.x);
   if (prevYaw != null) {
     const d = Math.atan2(Math.sin(yaw - prevYaw), Math.cos(yaw - prevYaw));
