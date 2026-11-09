@@ -318,7 +318,7 @@ export function StudioScene(props: Props) {
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
         style={{ touchAction: "none" }}
         role="img"
-        aria-label="헤엄치는 인형 생물. 누르거나 끌면 그곳으로 따라옵니다"
+        aria-label="A swimming plush sea creature. Tap or drag and it follows you."
       >
         <Scene {...props} />
       </Canvas>

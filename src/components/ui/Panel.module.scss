@@ -28,12 +28,52 @@
     max-height: 42vh;
     padding: 12px 14px 14px;
   }
+
+  &.collapsed {
+    gap: 0;
+  }
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.headerSide {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+// 접기 표시: 펼치면 위, 접으면 아래를 가리키는 작은 꺾쇠
+.chevron {
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid var(--ink-soft);
+  border-bottom: 1px solid var(--ink-soft);
+  transform: translateY(-1px) rotate(-135deg);
+  transition: transform 0.18s ease;
+
+  .collapsed & {
+    transform: translateY(-3px) rotate(45deg);
+  }
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  &[hidden] {
+    display: none;
+  }
 }
 
 .kicker {

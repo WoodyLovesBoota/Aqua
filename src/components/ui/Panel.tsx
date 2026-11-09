@@ -1,19 +1,27 @@
 "use client";
 
 import classNames from "classnames/bind";
-import type { ReactNode } from "react";
+import { type ReactNode, useId, useState } from "react";
 import styles from "./Panel.module.scss";
 
 const cx = classNames.bind(styles);
 
+/** 좁은 화면(폰)에선 패널이 수조를 가리므로 접힌 채 시작하고, 제목 줄을 눌러 펼친다 */
 export function Panel({ title, fig, children }: { title: string; fig?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(() => typeof window === "undefined" || !window.matchMedia("(max-width: 720px)").matches);
+  const bodyId = useId();
   return (
-    <aside className={cx("panel")} aria-label={title}>
-      <div className={cx("header")}>
+    <aside className={cx("panel", { collapsed: !open })} aria-label={title}>
+      <button type="button" className={cx("header")} onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls={bodyId}>
         <h2 className={cx("kicker")}>{title}</h2>
-        {fig && <span className={cx("fig")}>{fig}</span>}
+        <span className={cx("headerSide")}>
+          {fig && <span className={cx("fig")}>{fig}</span>}
+          <span className={cx("chevron")} aria-hidden />
+        </span>
+      </button>
+      <div id={bodyId} className={cx("body")} hidden={!open}>
+        {children}
       </div>
-      {children}
     </aside>
   );
 }

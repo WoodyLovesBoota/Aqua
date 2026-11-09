@@ -19,13 +19,13 @@ export class GlBoundary extends Component<{ children: ReactNode; onFail?: () => 
   }
 
   componentDidCatch(error: unknown) {
-    console.error("[aqua] 3D 렌더러를 만들 수 없습니다", error);
+    console.error("[aqua] could not create the 3D renderer", error);
     // 페이지의 로딩 오버레이를 걷어 안내 문구가 보이게 한다
     this.props.onFail?.();
   }
 
   render() {
-    if (this.state.failed) return <Loading text="이 브라우저에서는 3D 장면을 그릴 수 없어요. WebGL 을 켜거나 다른 브라우저로 열어주세요." />;
+    if (this.state.failed) return <Loading text="This browser can’t draw the 3D scene. Turn on WebGL or try another browser." />;
     return this.props.children;
   }
 }

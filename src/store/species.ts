@@ -85,8 +85,8 @@ export const SPECIES_DATA: Record<Species, SpeciesData> = {
     fixed: { eyeStyle: "bead", eyeSize: 1.1, head: "none", neck: "none", face: "blush", accentColor: "#c8323a", pile: 0.5, stuffing: 0.62, tailBeat: 0.9 },
     copy: {
       no: "01",
-      placeholder: "상어 이름",
-      fallback: "상어",
+      placeholder: "Hammerhead name",
+      fallback: "Hammerhead",
     },
   },
   manta: {
@@ -106,8 +106,8 @@ export const SPECIES_DATA: Record<Species, SpeciesData> = {
     fixed: { pile: 0.4, stuffing: 0.5, tailBeat: 0.8 },
     copy: {
       no: "02",
-      placeholder: "가오리 이름",
-      fallback: "가오리",
+      placeholder: "Manta name",
+      fallback: "Manta",
     },
   },
   turtle: {
@@ -127,8 +127,8 @@ export const SPECIES_DATA: Record<Species, SpeciesData> = {
     fixed: { pile: 0.5, stuffing: 0.6, tailBeat: 0.7 },
     copy: {
       no: "03",
-      placeholder: "거북이 이름",
-      fallback: "거북이",
+      placeholder: "Turtle name",
+      fallback: "Turtle",
     },
   },
   dolphin: {
@@ -148,8 +148,8 @@ export const SPECIES_DATA: Record<Species, SpeciesData> = {
     fixed: { pile: 0.4, stuffing: 0.6, tailBeat: 1.1 },
     copy: {
       no: "04",
-      placeholder: "돌고래 이름",
-      fallback: "돌고래",
+      placeholder: "Dolphin name",
+      fallback: "Dolphin",
     },
   },
   whaleshark: {
@@ -169,8 +169,8 @@ export const SPECIES_DATA: Record<Species, SpeciesData> = {
     fixed: { pile: 0.45, stuffing: 0.7, tailBeat: 0.6 },
     copy: {
       no: "05",
-      placeholder: "고래상어 이름",
-      fallback: "고래상어",
+      placeholder: "Whale shark name",
+      fallback: "Whale shark",
     },
   },
 };

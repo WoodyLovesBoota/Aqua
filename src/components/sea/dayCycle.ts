@@ -178,10 +178,10 @@ export function formatHour(h: number) {
 
 /** 시간대 이름 (패널 표시용) */
 export function dayPhase(h: number) {
-  if (h < 5) return "밤";
-  if (h < 6.5) return "새벽";
-  if (h < 10) return "아침";
-  if (h < 16) return "낮";
-  if (h < 19) return "노을";
-  return "밤";
+  if (h < 5) return "Night";
+  if (h < 6.5) return "Dawn";
+  if (h < 10) return "Morning";
+  if (h < 16) return "Day";
+  if (h < 19) return "Sunset";
+  return "Night";
 }

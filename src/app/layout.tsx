@@ -22,7 +22,7 @@ const instrument = Instrument_Serif({
 
 export const metadata: Metadata = {
   title: { default: "Aqua — Plush Sea Creatures", template: "%s — Aqua" },
-  description: "귀여운 인형 바다 생물을 꾸미고 작은 젤리 바다에 풀어놓는 관상용 수조.",
+  description: "A tiny jelly lagoon to watch — customise plush sea creatures and release them into the water.",
 };
 
 export const viewport: Viewport = {
@@ -35,7 +35,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="ko"
+      lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${instrument.variable}`}
     >
       <body>{children}</body>

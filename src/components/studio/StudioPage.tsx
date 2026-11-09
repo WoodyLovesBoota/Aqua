@@ -17,6 +17,9 @@ export default function StudioPage() {
   const setCreature = useSharkStore((s) => s.setCreature);
   const setSpecies = useSharkStore((s) => s.setSpecies);
   const reset = useSharkStore((s) => s.reset);
+  const released = useSharkStore((s) => s.released);
+  const release = useSharkStore((s) => s.release);
+  const recall = useSharkStore((s) => s.recall);
   const router = useRouter();
   // 셰이더 워밍업이 끝날 때까지 로딩 문구를 두고, 끝나면 캔버스를 페이드인
   const [ready, setReady] = useState(false);
@@ -28,34 +31,42 @@ export default function StudioPage() {
   const { copy, palette } = SPECIES_DATA[species];
   const current = creatures[species];
   const patch = (p: Parameters<typeof setCreature>[1]) => setCreature(species, p);
+  const name = current.name || copy.fallback;
+  const inLagoon = released.includes(species);
+  // 바다가 메인(/) — 풀어 주고 돌아간다 (이미 바다에 있으면 고친 모습 그대로 돌아갈 뿐)
+  const releaseAndGo = () => {
+    release(species);
+    router.push("/");
+  };
 
   return (
     <Frame>
       <CanvasSlot ready={ready}>
         <StudioScene species={species} config={current} onReady={onReady} />
       </CanvasSlot>
-      {!ready && <Loading text="솜을 채우는 중…" />}
+      {!ready && <Loading text="Stuffing the plush…" />}
 
-      <TopBar left="" href="/sea" linkLabel="바다로 가기" />
+      <TopBar left="Drag to lead it around" href="/" linkLabel="Back to the lagoon" />
+      <h1 className="srOnly">Studio — {SPECIES_DATA[species].label}</h1>
 
       <Panel title="The specimen" fig={`fig. ${copy.no}`}>
-        <Section label="종 (Specimen)">
+        <Section label={`Specimen · ${inLagoon ? "swimming" : "new"}`}>
           <Segmented options={SPECIES_OPTIONS} value={species} onChange={setSpecies} />
         </Section>
 
-        <Section label="이름">
+        <Section label="Name">
           <TextInput value={current.name} onChange={(name) => patch({ name })} placeholder={copy.placeholder} />
         </Section>
 
-        <Section label="털 (Fur)">
+        <Section label="Fur">
           <Swatches options={palette} value={current.furColor} onChange={(o) => patch({ furColor: o.fur, bellyColor: o.belly })} />
         </Section>
 
         <Actions>
-          <Action onClick={reset}>초기화</Action>
-          <Action onClick={() => router.push("/sea")}>바다 보기</Action>
-          <Action primary onClick={() => router.push("/sea")}>
-            {current.name || copy.fallback} 바다에 풀어주기 →
+          <Action onClick={reset}>Reset</Action>
+          {inLagoon ? <Action onClick={() => recall(species)}>Take out</Action> : <Action onClick={() => router.push("/")}>View lagoon</Action>}
+          <Action primary onClick={releaseAndGo}>
+            {inLagoon ? `Back to ${name} in the lagoon →` : `Release ${name} into the lagoon →`}
           </Action>
         </Actions>
       </Panel>

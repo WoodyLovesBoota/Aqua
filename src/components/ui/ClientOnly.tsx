@@ -18,12 +18,12 @@ function preloadMesh(files: (typeof CREATURE_FILES)[keyof typeof CREATURE_FILES]
  */
 const StudioInner = dynamic(() => import("@/components/studio/StudioPage"), {
   ssr: false,
-  loading: () => <Loading text="솜을 채우는 중…" />,
+  loading: () => <Loading text="Stuffing the plush…" />,
 });
 
 const SeaInner = dynamic(() => import("@/components/sea/SeaPage"), {
   ssr: false,
-  loading: () => <Loading text="물을 채우는 중…" />,
+  loading: () => <Loading text="Filling the lagoon…" />,
 });
 
 export function StudioClient() {

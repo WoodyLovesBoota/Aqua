@@ -3,7 +3,7 @@
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { ThreeEvent } from "@react-three/fiber";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CreatureConfig, Species } from "@/store/species";
@@ -40,8 +40,12 @@ interface Props {
   creatures: Record<Species, CreatureConfig>;
   /** 물 색 (waterMaterials.FLAVOURS 의 id) */
   flavour: string;
+  /** 바다에 풀어 둔 종 — 없는 종은 그리지 않고 서로 피하는 목록에서도 뺀다 */
+  released: readonly Species[];
   /** 셰이더 워밍업이 끝나 첫 프레임을 그릴 준비가 됐을 때 */
   onReady?: () => void;
+  /** 페이지가 사진 찍기 함수를 받아 가는 자리 (현재 화면을 PNG Blob 으로) */
+  snapshot?: RefObject<(() => Promise<Blob | null>) | null>;
 }
 
 // 수조 치수(lagoonNav.TANK): 젤리 블록 같은 둥근 라군
@@ -61,6 +65,10 @@ const CAM_BACK = { x: Math.sin(CAM_AZ), z: Math.cos(CAM_AZ) };
 // 파도 물리는 무시한다 — 수면은 블록과 함께 움직일 뿐 쏠리지 않는다.
 // shearPerPx: 손 1px 당 전단 목표(높이당 변위) · max: 전단 상한(윗면 변위 = max × 블록 높이 4.15) · omega/zeta: 전단 스프링 · base: 바닥이 손을 따라가는 비율(월드/px) · tilt: 전단에 딸린 작은 기울기 · squash: 전단²에 비례한 눌림
 const JELLY = { shearPerPx: 0.0022, max: 0.26, omega: 2 * Math.PI * 2.0, zeta: 0.085, basePerPx: 0.004, baseMax: 0.6, tilt: 0.22, squash: 1.2 };
+// 가만히 두면 IDLE_WOBBLE.every 초마다 블록이 저절로 살짝 출렁인다 (전단 스프링에 속도를 툭 — 최대 전단 ≈ kick/ω ≈ 0.04, 손으로 흔든 것의 1/6).
+// ?wobble=초 로 주기를 바꾼다 (점검용, 0 이면 끔)
+const WOBBLE_PARAM = captureParam("wobble");
+const IDLE_WOBBLE = { every: WOBBLE_PARAM != null && Number.isFinite(Number(WOBBLE_PARAM)) ? Number(WOBBLE_PARAM) : 60, kick: 0.5 };
 const BLOCK_BOTTOM = BOTTOM - STRATA_H;
 const BLOCK_MID = (TOP + BOTTOM - STRATA_H) / 2; // 기울기 피벗 높이
 // ?shear=x,z — 정적 전단 (캡처용)
@@ -106,8 +114,8 @@ const SHAFTS = [
   { x: 1.0, z: 3.0, w: 1.2, rot: -0.2 },
 ].map((sh) => ({ ...sh, x: sh.x * S, z: sh.z * S }));
 
-function Scene({ creatures, flavour, onReady }: Props) {
-  const { camera, gl } = useThree();
+function Scene({ creatures, flavour, released, onReady, snapshot }: Props) {
+  const { camera, gl, scene } = useThree();
   const sharkRoot = useRef<THREE.Group>(null!);
   const shadow = useRef<THREE.Mesh>(null!);
   // 블록 전체 그룹(행렬은 useFrame 이 합성해 직접 쓴다) + 흔들림 상태. 안정된 객체로 두어 LagoonDay 가 하늘 돔(뚜껑)을 이 안에 포털로 넣는다
@@ -117,7 +125,7 @@ function Scene({ creatures, flavour, onReady }: Props) {
     return g;
   }, []);
   // grabbing/px/py: 잡은 화면 좌표, tx/tz: 전단 목표, sx/sz: 전단(높이당 변위), vx/vz: 전단 속도, bx/bz: 바닥 변위(목표 btx/btz)
-  const jelly = useRef({ grabbing: false, px: 0, py: 0, tx: 0, tz: 0, sx: 0, sz: 0, vx: 0, vz: 0, btx: 0, btz: 0, bx: 0, bz: 0 });
+  const jelly = useRef({ idle: 0, grabbing: false, px: 0, py: 0, tx: 0, tz: 0, sx: 0, sz: 0, vx: 0, vz: 0, btx: 0, btz: 0, bx: 0, bz: 0 });
   const bubbles = useRef<THREE.InstancedMesh>(null!);
   const rocksRef = useRef<THREE.InstancedMesh>(null!);
   const stems = useRef<THREE.InstancedMesh>(null!);
@@ -126,8 +134,14 @@ function Scene({ creatures, flavour, onReady }: Props) {
   // 생물 위치 벡터는 씬이 소유하고 각 AI 가 제자리에서 갱신한다 — 서로 피할 때 같은 벡터를 본다
   const positions = useMemo(() => Object.fromEntries(SWIMMERS.map((b) => [b.species, new THREE.Vector3()])) as Record<string, THREE.Vector3>, []);
   const sharkPos = useMemo(() => new THREE.Vector3(1.5, -1.4, 1.5), []);
-  const everyone = useMemo(() => [sharkPos, ...Object.values(positions)], [sharkPos, positions]);
-  const sharkAvoid = useMemo(() => Object.values(positions), [positions]);
+  const releasedKey = released.join(",");
+  const hasShark = released.includes("hammerhead");
+  const swimmers = useMemo(() => SWIMMERS.filter((b) => releasedKey.split(",").includes(b.species)), [releasedKey]);
+  // 서로 피하는 목록은 지금 바다에 있는 생물만 (빠진 종의 마지막 자리를 유령처럼 피하지 않게)
+  const sharkAvoid = useMemo(() => swimmers.map((b) => positions[b.species]), [swimmers, positions]);
+  const everyone = useMemo(() => (hasShark ? [sharkPos, ...sharkAvoid] : sharkAvoid), [hasShark, sharkPos, sharkAvoid]);
+  // 새로 풀어 준 생물은 들어온 자리에 첨벙 (첫 마운트의 기본 생물들은 빼고)
+  const seen = useRef<Set<string> | null>(null);
   const ai = useRef<Ai | null>(null);
   if (ai.current == null) {
     ai.current = {
@@ -307,6 +321,46 @@ function Scene({ creatures, flavour, onReady }: Props) {
   const wake = useCallback((x: number, z: number, radius: number, strength: number) => sim.push(x, z, radius, strength), [sim]);
 
   useEffect(() => {
+    const now = new Set(releasedKey.split(",").filter(Boolean));
+    const prev = seen.current;
+    seen.current = now;
+    if (!prev) return;
+    const added = [...now].filter((id) => !prev.has(id));
+    if (!added.length) return;
+    // 한 프레임 뒤 (새 생물이 첫 자리를 잡은 뒤) 그 자리에서 첨벙
+    const id = window.setTimeout(() => {
+      for (const sp of added) {
+        const p = sp === "hammerhead" ? sharkPos : positions[sp];
+        if (p) splash(p.x, p.z, 1.6);
+      }
+    }, 120);
+    return () => window.clearTimeout(id);
+  }, [releasedKey, positions, sharkPos, splash]);
+
+  // 사진: 지금 장면을 한 번 더 그리고 같은 태스크 안에서 캔버스를 떠낸다 (preserveDrawingBuffer 없이도 비지 않는다)
+  useEffect(() => {
+    if (!snapshot) return;
+    snapshot.current = () =>
+      new Promise<Blob | null>((resolve) => {
+        gl.render(scene, camera);
+        // 캔버스는 투명 바탕이라 종이색 위에 얹어 떠낸다 (같은 태스크 안이라 그린 버퍼가 아직 남아 있다)
+        const src = gl.domElement;
+        const out = document.createElement("canvas");
+        out.width = src.width;
+        out.height = src.height;
+        const ctx2d = out.getContext("2d");
+        if (!ctx2d) return resolve(null);
+        ctx2d.fillStyle = "#ebe7e0";
+        ctx2d.fillRect(0, 0, out.width, out.height);
+        ctx2d.drawImage(src, 0, 0);
+        out.toBlob(resolve, "image/png");
+      });
+    return () => {
+      snapshot.current = null;
+    };
+  }, [snapshot, gl, scene, camera]);
+
+  useEffect(() => {
     const inst = rocksRef.current;
     const m = new THREE.Matrix4();
     rocks.forEach((r, i) => {
@@ -322,6 +376,7 @@ function Scene({ creatures, flavour, onReady }: Props) {
     (e.target as Element).setPointerCapture(e.pointerId);
     const j = jelly.current;
     j.grabbing = true;
+    j.idle = 0;
     j.px = e.nativeEvent.clientX;
     j.py = e.nativeEvent.clientY;
   };
@@ -355,6 +410,7 @@ function Scene({ creatures, flavour, onReady }: Props) {
     p.z = e.point.z;
     p.has = true;
     p.down = true;
+    jelly.current.idle = 0;
     sim.push(p.x, p.z, PRESS.downR, PRESS.down);
   };
   const onSurfaceUp = () => {
@@ -372,6 +428,7 @@ function Scene({ creatures, flavour, onReady }: Props) {
     }
     const dx = x - p.x, dz = z - p.z;
     const dist = Math.hypot(dx, dz);
+    jelly.current.idle = 0;
     if (!down && dist < 0.04) return; // 미동은 쌓아 두었다가 한 번에 (안 보이는 임펄스로 슬롯을 먹지 않게)
     // 궤적을 spacing 간격으로 잘라 넣는다 (빠르게 끌어도 골이 끊기지 않게)
     const n = Math.max(1, Math.min(6, Math.ceil(dist / PRESS.spacing)));
@@ -406,6 +463,14 @@ function Scene({ creatures, flavour, onReady }: Props) {
         j.sx = STATIC_SHEAR.x;
         j.sz = STATIC_SHEAR.z;
       } else {
+        // 조작이 없으면 주기마다 무작위 방향으로 툭 (잡고 있을 땐 세지 않는다)
+        j.idle = j.grabbing ? 0 : j.idle + dt;
+        if (IDLE_WOBBLE.every > 0 && j.idle >= IDLE_WOBBLE.every) {
+          j.idle = 0;
+          const a = Math.random() * Math.PI * 2;
+          j.vx += Math.cos(a) * IDLE_WOBBLE.kick;
+          j.vz += Math.sin(a) * IDLE_WOBBLE.kick;
+        }
         const k = JELLY.omega * JELLY.omega, c = 2 * JELLY.zeta * JELLY.omega;
         j.vx += (-k * (j.sx - j.tx) - c * j.vx) * dt;
         j.vz += (-k * (j.sz - j.tz) - c * j.vz) * dt;
@@ -483,86 +548,88 @@ function Scene({ creatures, flavour, onReady }: Props) {
       camera.lookAt(tx, aspect < 1 ? -3.8 : CAM.lookY, tz); // 세로 화면은 아래 패널에 안 가리게 수조를 위로
     }
 
-    // 상어 AI
+    // 상어 AI (바다에 없으면 건너뛴다 — 다시 풀어 주면 마지막 자리에서 이어 헤엄친다)
     const a = ai.current!;
-    const targetSpeed = 1.15;
+    if (hasShark) {
+      const targetSpeed = 1.15;
 
-    a.retarget -= dt;
-    if (a.retarget <= 0 || a.target.distanceTo(a.pos) < 0.6) {
-      // 만타·거북 근처(3 이내)는 피해서 고른다
-      for (let i = 0; i < 4; i++) {
-        randomTarget(a.target);
-        if (sharkAvoid.every((o) => Math.hypot(a.target.x - o.x, a.target.z - o.z) > 3.5)) break;
-      }
-      a.retarget = THREE.MathUtils.randFloat(4, 8);
-    }
-
-    const to = tmp.v.copy(a.target).sub(a.pos);
-    // 회피: 코앞(0.9 앞)이 막혀 있으면 구역 중심 반대쪽으로 밀어낸다
-    {
-      const ax = a.pos.x + Math.cos(a.yaw) * 0.9;
-      const az = a.pos.z - Math.sin(a.yaw) * 0.9;
-      if (blocked(ax, a.pos.y, az, 0.3)) {
-        pushAway(ax, az, to); // 얕은 바닥이면 위로
-        a.retarget = Math.min(a.retarget, 0.5);
-      }
-    }
-    // 만타·거북과 겹치지 않게 가벼운 분리
-    for (const o of sharkAvoid) {
-      const dx = a.pos.x - o.x, dz = a.pos.z - o.z;
-      const d = Math.hypot(dx, dz);
-      if (d < 2.2) {
-        const k = (2.2 - d) * 3;
-        to.x += (dx / Math.max(d, 0.05)) * k;
-        to.z += (dz / Math.max(d, 0.05)) * k;
-      }
-    }
-    const wantYaw = Math.atan2(-to.z, to.x);
-    const wantPitch = THREE.MathUtils.clamp(Math.atan2(to.y, Math.hypot(to.x, to.z)), -0.35, 0.35); // 인형답게 완만히
-    const dy = yawDelta(wantYaw, a.yaw, a.turnRate);
-    const maxTurn = 1.5 * dt;
-    const step = THREE.MathUtils.clamp(dy, -maxTurn, maxTurn);
-    a.yaw += step;
-    a.turnRate += (step / dt - a.turnRate) * Math.min(1, dt * 5);
-    a.pitch += (wantPitch - a.pitch) * Math.min(1, dt * 2.5);
-    a.speed += (targetSpeed - a.speed) * Math.min(1, dt * 2);
-
-    const fwd = tmp.v2.set(Math.cos(a.yaw) * Math.cos(a.pitch), Math.sin(a.pitch), -Math.sin(a.yaw) * Math.cos(a.pitch));
-    a.pos.addScaledVector(fwd, a.speed * dt);
-    // 벽에 부드럽게 갇히기
-    a.pos.x = THREE.MathUtils.clamp(a.pos.x, -BOUNDS.x - 0.2, BOUNDS.x + 0.2);
-    a.pos.z = THREE.MathUtils.clamp(a.pos.z, -BOUNDS.z - 0.2, BOUNDS.z + 0.2);
-    a.pos.y = THREE.MathUtils.clamp(a.pos.y, Math.max(BOUNDS.yMin - 0.1, floorHeight(BOTTOM, a.pos.x, a.pos.z) + 0.4), BOUNDS.yMax + 0.1);
-    if (Math.abs(a.pos.x) > BOUNDS.x || Math.abs(a.pos.z) > BOUNDS.z) {
-      // 벽에 닿았는데 목표도 바깥쪽이면 가운데 쪽 새 목표 (매 프레임 다시 뽑으면 조향이 수렴하지 못한다)
-      if (Math.abs(a.target.x) > BOUNDS.x * 0.7 || Math.abs(a.target.z) > BOUNDS.z * 0.7) {
-        randomTarget(a.target).multiplyScalar(0.5);
+      a.retarget -= dt;
+      if (a.retarget <= 0 || a.target.distanceTo(a.pos) < 0.6) {
+        // 만타·거북 근처(3 이내)는 피해서 고른다
+        for (let i = 0; i < 4; i++) {
+          randomTarget(a.target);
+          if (sharkAvoid.every((o) => Math.hypot(a.target.x - o.x, a.target.z - o.z) > 3.5)) break;
+        }
         a.retarget = THREE.MathUtils.randFloat(4, 8);
       }
+
+      const to = tmp.v.copy(a.target).sub(a.pos);
+      // 회피: 코앞(0.9 앞)이 막혀 있으면 구역 중심 반대쪽으로 밀어낸다
+      {
+        const ax = a.pos.x + Math.cos(a.yaw) * 0.9;
+        const az = a.pos.z - Math.sin(a.yaw) * 0.9;
+        if (blocked(ax, a.pos.y, az, 0.3)) {
+          pushAway(ax, az, to); // 얕은 바닥이면 위로
+          a.retarget = Math.min(a.retarget, 0.5);
+        }
+      }
+      // 만타·거북과 겹치지 않게 가벼운 분리
+      for (const o of sharkAvoid) {
+        const dx = a.pos.x - o.x, dz = a.pos.z - o.z;
+        const d = Math.hypot(dx, dz);
+        if (d < 2.2) {
+          const k = (2.2 - d) * 3;
+          to.x += (dx / Math.max(d, 0.05)) * k;
+          to.z += (dz / Math.max(d, 0.05)) * k;
+        }
+      }
+      const wantYaw = Math.atan2(-to.z, to.x);
+      const wantPitch = THREE.MathUtils.clamp(Math.atan2(to.y, Math.hypot(to.x, to.z)), -0.35, 0.35); // 인형답게 완만히
+      const dy = yawDelta(wantYaw, a.yaw, a.turnRate);
+      const maxTurn = 1.5 * dt;
+      const step = THREE.MathUtils.clamp(dy, -maxTurn, maxTurn);
+      a.yaw += step;
+      a.turnRate += (step / dt - a.turnRate) * Math.min(1, dt * 5);
+      a.pitch += (wantPitch - a.pitch) * Math.min(1, dt * 2.5);
+      a.speed += (targetSpeed - a.speed) * Math.min(1, dt * 2);
+
+      const fwd = tmp.v2.set(Math.cos(a.yaw) * Math.cos(a.pitch), Math.sin(a.pitch), -Math.sin(a.yaw) * Math.cos(a.pitch));
+      a.pos.addScaledVector(fwd, a.speed * dt);
+      // 벽에 부드럽게 갇히기
+      a.pos.x = THREE.MathUtils.clamp(a.pos.x, -BOUNDS.x - 0.2, BOUNDS.x + 0.2);
+      a.pos.z = THREE.MathUtils.clamp(a.pos.z, -BOUNDS.z - 0.2, BOUNDS.z + 0.2);
+      a.pos.y = THREE.MathUtils.clamp(a.pos.y, Math.max(BOUNDS.yMin - 0.1, floorHeight(BOTTOM, a.pos.x, a.pos.z) + 0.4), BOUNDS.yMax + 0.1);
+      if (Math.abs(a.pos.x) > BOUNDS.x || Math.abs(a.pos.z) > BOUNDS.z) {
+        // 벽에 닿았는데 목표도 바깥쪽이면 가운데 쪽 새 목표 (매 프레임 다시 뽑으면 조향이 수렴하지 못한다)
+        if (Math.abs(a.target.x) > BOUNDS.x * 0.7 || Math.abs(a.target.z) > BOUNDS.z * 0.7) {
+          randomTarget(a.target).multiplyScalar(0.5);
+          a.retarget = THREE.MathUtils.randFloat(4, 8);
+        }
+      }
+
+      const bankRoll = THREE.MathUtils.clamp(-a.turnRate * 0.35, -0.6, 0.6);
+      a.roll += (bankRoll - a.roll) * Math.min(1, dt * 3);
+
+      const g = sharkRoot.current;
+      g.position.copy(a.pos);
+      g.position.y += Math.sin(t * 1.1) * 0.03;
+      tmp.e.set(a.roll, a.yaw, a.pitch, "YZX");
+      g.quaternion.setFromEuler(tmp.e);
+
+      const m = motion.current;
+      m.beat += (0.7 + a.speed * 0.15 - m.beat) * Math.min(1, dt * 3);
+      m.amp = 0.6 + Math.min(0.3, a.speed * 0.15);
+      m.turn += (THREE.MathUtils.clamp(a.turnRate * 0.5, -1, 1) - m.turn) * Math.min(1, dt * 5);
+
+      // 그림자
+      shadow.current.position.set(a.pos.x, floorHeight(BOTTOM, a.pos.x, a.pos.z) + 0.015, a.pos.z);
+      shadow.current.rotation.z = -a.yaw;
+      const depthK = 1 - (a.pos.y - BOTTOM) / (TOP - BOTTOM);
+      shadow.current.scale.set((1.6 + (1 - depthK) * 0.8) * SHADOW_K, (0.9 + (1 - depthK) * 0.5) * SHADOW_K, 1);
+      (shadow.current.material as THREE.MeshBasicMaterial).opacity = 0.35 + depthK * 0.5;
+
+      if (DEBUG_ON) publishDebug("hammerheadNav", { pos: a.pos.toArray(), target: a.target.toArray(), speed: a.speed, retarget: a.retarget });
     }
-
-    const bankRoll = THREE.MathUtils.clamp(-a.turnRate * 0.35, -0.6, 0.6);
-    a.roll += (bankRoll - a.roll) * Math.min(1, dt * 3);
-
-    const g = sharkRoot.current;
-    g.position.copy(a.pos);
-    g.position.y += Math.sin(t * 1.1) * 0.03;
-    tmp.e.set(a.roll, a.yaw, a.pitch, "YZX");
-    g.quaternion.setFromEuler(tmp.e);
-
-    const m = motion.current;
-    m.beat += (0.7 + a.speed * 0.15 - m.beat) * Math.min(1, dt * 3);
-    m.amp = 0.6 + Math.min(0.3, a.speed * 0.15);
-    m.turn += (THREE.MathUtils.clamp(a.turnRate * 0.5, -1, 1) - m.turn) * Math.min(1, dt * 5);
-
-    // 그림자
-    shadow.current.position.set(a.pos.x, floorHeight(BOTTOM, a.pos.x, a.pos.z) + 0.015, a.pos.z);
-    shadow.current.rotation.z = -a.yaw;
-    const depthK = 1 - (a.pos.y - BOTTOM) / (TOP - BOTTOM);
-    shadow.current.scale.set((1.6 + (1 - depthK) * 0.8) * SHADOW_K, (0.9 + (1 - depthK) * 0.5) * SHADOW_K, 1);
-    (shadow.current.material as THREE.MeshBasicMaterial).opacity = 0.35 + depthK * 0.5;
-
-    if (DEBUG_ON) publishDebug("hammerheadNav", { pos: a.pos.toArray(), target: a.target.toArray(), speed: a.speed, retarget: a.retarget });
 
 
     // 버블
@@ -661,17 +728,17 @@ function Scene({ creatures, flavour, onReady }: Props) {
       <points geometry={snow} material={snowMat} />
 
       {/* 상어 그림자 */}
-      <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]} visible={hasShark}>
         <planeGeometry args={[1.9, 1.1]} />
         <meshBasicMaterial map={shadowTex} transparent depthWrite={false} />
       </mesh>
 
       {/* 상어 (자율 유영 AI 는 위) */}
       <group ref={sharkRoot} scale={SHARK_SCALE}>
-        <PlushCreature species="hammerhead" config={asShark(creatures.hammerhead)} motion={motion} wet lod="mid" />
+        {hasShark && <PlushCreature species="hammerhead" config={asShark(creatures.hammerhead)} motion={motion} wet lod="mid" />}
       </group>
       {/* 나머지 생물: 공용 조향 + 종별 행동 (수면 스침·호흡·점프·섭식) */}
-      {SWIMMERS.map((b) => (
+      {swimmers.map((b) => (
         <LagoonSwimmer key={b.species} behaviour={b} config={creatures[b.species]} pos={positions[b.species]} others={everyone} onSplash={splash} />
       ))}
       {/* 산호 군락의 열대어 (1 드로우) */}
@@ -719,7 +786,7 @@ export function SeaScene(props: Props) {
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
         style={{ touchAction: "none" }}
         role="img"
-        aria-label="인형 바다 생물들이 헤엄치는 리조트 라군. 수면을 누르거나 끌면 물이 파이며 출렁입니다"
+        aria-label="A resort lagoon with plush sea creatures swimming. Press or drag the water to make it dip and ripple; grab the sand to wobble the block."
       >
         <Scene {...props} />
       </Canvas>

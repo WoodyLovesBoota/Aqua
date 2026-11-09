@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="w" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fe6dc"/>
+      <stop offset="1" stop-color="#149ab4"/>
+    </linearGradient>
+    <linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3e2bb"/>
+      <stop offset="1" stop-color="#d9bf8a"/>
+    </linearGradient>
+    <clipPath id="c"><rect x="4" y="4" width="56" height="56" rx="16"/></clipPath>
+    <clipPath id="b"><ellipse cx="31" cy="34" rx="16" ry="11.5"/></clipPath>
+  </defs>
+  <g clip-path="url(#c)">
+    <rect x="4" y="4" width="56" height="56" fill="url(#w)"/>
+    <path d="M4 50 Q20 44 34 49 T60 47 V60 H4Z" fill="url(#s)"/>
+    <path d="M10 17 Q17 13 24 17 T38 17 T52 17" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="2.6" stroke-linecap="round"/>
+  </g>
+  <!-- plush fish: round body, tail, cream belly, back seam, bead eye, blush (no mouth) -->
+  <path d="M45 34 L55 27 Q53 34 55 41 Z" fill="#e99bb1" stroke="#c9728c" stroke-width="1.2" stroke-linejoin="round"/>
+  <ellipse cx="31" cy="34" rx="16" ry="11.5" fill="#e99bb1" stroke="#c9728c" stroke-width="1.2"/>
+  <ellipse cx="31" cy="47" rx="19" ry="7.5" fill="#fff1f4" clip-path="url(#b)"/>
+  <path d="M24 26 Q31 21.5 38 26" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-dasharray="2 2" stroke-linecap="round"/>
+  <circle cx="23" cy="32" r="2.6" fill="#1d1b18"/>
+  <circle cx="22.2" cy="31.1" r=".8" fill="#fff"/>
+  <ellipse cx="22.5" cy="37.2" rx="2.4" ry="1.4" fill="#d9607e" opacity=".55"/>
+  <rect x="4.75" y="4.75" width="54.5" height="54.5" rx="15.25" fill="none" stroke="#0e6f84" stroke-opacity=".35" stroke-width="1.5"/>
+</svg>

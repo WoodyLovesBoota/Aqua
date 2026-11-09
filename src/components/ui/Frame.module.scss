@@ -37,6 +37,14 @@
   button {
     pointer-events: auto;
   }
+
+  // 왼쪽 조작 안내는 좁은 화면에선 링크와 겹치므로 숨긴다
+  > span {
+    color: var(--ink-faint);
+    @media (max-width: 640px) {
+      display: none;
+    }
+  }
 }
 
 .badge {

@@ -18,7 +18,16 @@ interface SharkStore {
   setCreature: (species: Species, patch: Partial<UserFields>) => void;
   setSpecies: (species: Species) => void;
   reset: () => void;
+  /** 바다에 풀어 둔 종 (SPECIES_IDS 순서 유지). 기본은 전부 */
+  released: Species[];
+  release: (species: Species) => void;
+  recall: (species: Species) => void;
+  /** 바다 물 색 (waterMaterials.FLAVOURS 의 id) */
+  flavour: string;
+  setFlavour: (flavour: string) => void;
 }
+
+const inOrder = (set: Set<Species>) => SPECIES_IDS.filter((id) => set.has(id));
 
 function pickUser(saved: unknown): Partial<UserFields> {
   const s = (saved ?? {}) as Partial<UserFields>;
@@ -38,6 +47,11 @@ export const useSharkStore = create<SharkStore>()(
         set((s) => ({ creatures: { ...s.creatures, [species]: { ...s.creatures[species], ...patch, ...SPECIES_DATA[species].fixed } } })),
       setSpecies: (species) => set({ species }),
       reset: () => set((s) => ({ creatures: { ...s.creatures, [s.species]: DEFAULTS[s.species] } })),
+      released: [...SPECIES_IDS],
+      release: (species) => set((s) => ({ released: inOrder(new Set([...s.released, species])) })),
+      recall: (species) => set((s) => ({ released: s.released.filter((id) => id !== species) })),
+      flavour: "lagoon",
+      setFlavour: (flavour) => set({ flavour }),
     }),
     {
       name: "aqua.shark.v1",
@@ -45,9 +59,11 @@ export const useSharkStore = create<SharkStore>()(
       partialize: (s) => ({
         creatures: Object.fromEntries(SPECIES_IDS.map((id) => [id, pickUser(s.creatures[id])])),
         species: s.species,
+        released: s.released,
+        flavour: s.flavour,
       }),
       merge: (persisted, current) => {
-        const saved = (persisted ?? {}) as { creatures?: Partial<Record<Species, unknown>>; species?: unknown } & Record<string, unknown>;
+        const saved = (persisted ?? {}) as { creatures?: Partial<Record<Species, unknown>>; species?: unknown; released?: unknown; flavour?: unknown } & Record<string, unknown>;
         const creatures = Object.fromEntries(
           SPECIES_IDS.map((id) => {
             // 예전 저장 형식(config / manta / turtle …)도 읽는다
@@ -55,7 +71,10 @@ export const useSharkStore = create<SharkStore>()(
             return [id, { ...DEFAULTS[id], ...pickUser(saved.creatures?.[id] ?? legacy) }];
           }),
         ) as Creatures;
-        return { ...current, creatures, species: isSpecies(saved.species) ? saved.species : "hammerhead" };
+        // released 가 없던 예전 저장값은 전부 풀어 둔 상태로 본다
+        const released = Array.isArray(saved.released) ? inOrder(new Set(saved.released.filter(isSpecies))) : current.released;
+        const flavour = typeof saved.flavour === "string" ? saved.flavour : current.flavour;
+        return { ...current, creatures, species: isSpecies(saved.species) ? saved.species : "hammerhead", released, flavour };
       },
     },
   ),
