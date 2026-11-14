@@ -1,6 +1,10 @@
 # Aqua 에 생물 추가하기 — 파일·순서·함정 (만타 가오리 추가에서 정리, 2026-10-10)
 
-좌표계: +x = 앞(입), +y = 위, +z = 오른쪽. 기준 크기는 상어 몸길이 ≈ 3.3, 만타 날개폭 ≈ 3.7 — 새 생물도 이 자릿수로 만들고 스튜디오/수조에서 배율로 줄인다.
+> 2026-11-14 구조 변경: 사이트는 꾸미기 없는 **모델 전시장**이 됐다. 스튜디오(`/studio`)·스토어(`store/`)·물 색 설정·매트릭스 점검은 삭제됐고,
+> 생물 생김새는 `src/components/creature/species.ts` 의 `CREATURE_CONFIGS` 기본값 하나로 고정, 모든 종이 항상 라군에 있다.
+> 새 전시(별도 모델링)는 `src/app/<slug>/page.tsx` 라우트 하나로 만든다. 화면에 패널·선택 UI 는 두지 않는다(사용자 요청, 라군도 삭제). 아래 문서의 스튜디오·팔레트·매트릭스 단계는 건너뛴다.
+
+좌표계: +x = 앞(입), +y = 위, +z = 오른쪽. 기준 크기는 상어 몸길이 ≈ 3.3, 만타 날개폭 ≈ 3.7 — 새 생물도 이 자릿수로 만들고 수조에서 배율로 줄인다.
 
 ## 만들 파일 — 종 하나 = SDF + 부품 + 매니페스트 + 레지스트리 두 줄 + 수조 행동
 | 파일 | 역할 | 본보기 |
@@ -8,27 +12,26 @@
 | `src/components/<name>/<name>Sdf.ts` | SDF 형태 정의 + `export const surface = makeSurface(sdX)` + `<NAME>_DEF: CreatureDef` | `manta/mantaSdf.ts` |
 | `src/components/<name>/<name>Manifest.ts` | 자동 생성. 처음엔 빈 값으로 만들어 두고 `pnpm bake:<name>` 이 덮어쓴다 | — |
 | `src/components/<name>/<Name>Parts.tsx` | 눈·입·볼터치 등. `creature/parts.tsx` 의 `beadEyes / stitchLine / blushPair / satinMat` 로 조립해 `Merged` 1 드로우 | `dolphin/DolphinParts.tsx` |
-| `src/store/species.ts` | `SPECIES_IDS` 에 id, `SPECIES_DATA` 에 라벨·팔레트·고정 생김새·스튜디오 문구 | — |
-| `src/components/creature/files.ts`, `registry.tsx` | 매니페스트 등록, `CREATURES` 에 swim 키·Parts·plump·studio 배율 | — |
+| `src/components/creature/species.ts` | `SPECIES_IDS` 에 id, `CREATURE_CONFIGS` 에 고정 생김새(털·배 색·솜·보풀·박자) | — |
+| `src/components/creature/files.ts`, `registry.tsx` | 매니페스트 등록, `CREATURES` 에 swim 키·Parts·plump | — |
 | `src/components/creature/PlushMaterial.ts` | `PlushSwim` 에 종 추가, `SWIM`(정점 변형)·`BELLY`(배 마스크·무늬) 스니펫 — 변수에 접두사 | — |
 | `src/components/sea/swimBehaviours.ts` | `Behaviour` 하나(nav 파라미터·init·tick·motion) 추가하고 `SWIMMERS` 에 넣기. 조향·회피·클램프·그림자는 `LagoonSwimmer`+`navStep` 공용 | — |
 | `scripts/bake-creature.mts`, `package.json` | `DEFS` 등록, `bake:<name>` 스크립트 | — |
-| `scripts/visual-check/matrix.mjs` | `sw(종, 팔레트id, fur, belly)` 케이스 3~4개 | — |
 | `README.md` | 구조·명령 | — |
 
-몸체 컴포넌트는 `PlushCreature`(공용) 이라 종마다 만들지 않는다. 스튜디오·수조·preload 는 레지스트리를 읽으므로 손댈 곳이 없다.
+몸체 컴포넌트는 `PlushCreature`(공용) 이라 종마다 만들지 않는다. 수조·preload 는 레지스트리를 읽으므로 손댈 곳이 없다.
 
 ## 순서 (10단계 기본형)
-1. 파이프라인: 위 파일 뼈대 + SDF v0(몸통만이라도) → `pnpm bake:<name>` 성공 → `?pose=1&species=<name>` 로 첫 캡처.
+1. 파이프라인: 위 파일 뼈대 + SDF v0(몸통만이라도) → `pnpm bake:<name>` 성공 → 근접 focus 뷰(없으면 `?focus=<name>` 를 SeaScene 에 추가)로 첫 캡처.
 2. 실루엣: 4방향 시트(`view=` q/top/side/front) → 비율·부위 배치.
 3. 플러시 다듬기: 두께·둥글기·smin, `?still=1&lod=hi|mid|lo` 세 LOD 비교 (고정 포즈에서도 헤엄이 돌아가니 `still=1` 필수).
 4. 재질: 배 마스크·무늬 스니펫, 팔레트 4색 top 뷰.
 5. 부품: 눈·입·볼터치·종 특유 디테일. 앵커는 `surfaceAnchor` 로 표면 투영 — 투영이 **엉뚱한 부위(가까운 지느러미)** 에 붙을 수 있으니 투영 시작점을 표면 가까이 두고 캡처로 확인.
 6. 유영 셰이더: 시간차 프레임 + PIL diff. 변위 h 가 한 축의 함수면 법선은 전단 공식 `(nx, ny, nz − h'·ny)` 로 보정.
-7. 스튜디오: 종 토글·문구·팔레트·매트릭스. 배율은 상어와 화면상 크기가 비슷하게.
+7. (스튜디오 단계는 삭제됨) 기본 색·솜을 `CREATURE_CONFIGS` 에서 확정하고 수조 배율을 기존 종과 비례하게.
 8. 수조: `swimBehaviours.ts` 에 행동 추가. 조향은 `navStep` 공용이라 `NavParams` 수치와 상태 기계(tick)만 쓴다. 수심이 높은 생물은 섬 물가 얕은 바닥 위로 떠올라 금지 구역을 넘는다 → `clearance` 키우고 `resolveNoGo` 안전망. 상어와 겹치지 않게 목표 선정 때 상어 3.5 밖 + 근접 밀어냄. 시간차 4장(6/14/22/30s)으로 확인.
-9. 성능: `ROUTES=/sea pnpm check:render <라벨>` + `STORE='{"species":"<name>"}' ROUTES=/ pnpm check:render <라벨>s`. 예산: 생물 1마리당 수조 draws +≤8(두 패스), tris +≤30k.
-10. 정리: 상어(및 기존 생물) 매트릭스 재촬영으로 불변 확인, README·결과표·메모리.
+9. 성능: `pnpm check:render <라벨>`. 예산: 생물 1마리당 수조 draws +≤8(두 패스), tris +≤30k.
+10. 정리: 기존 생물 근접 캡처로 불변 확인, README·결과표·메모리.
 
 ## SDF 작성 요령
 - 도우미는 `creature/sdf.ts`: `smin, smoothstep, sdRoundCone, sdRoundBox, sdEllipsoid, sdPolygon, smoothPoly, makeFin/sdFin, sdfNormal, sdfProject`.

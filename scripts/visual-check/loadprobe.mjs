@@ -2,7 +2,7 @@
 import { chromium } from "playwright";
 import { BASE } from "./browser.mjs";
 const N = Number(process.env.N ?? 6);
-const URL = process.env.URL ?? "/";
+const URL = process.env.URL ?? "/lagoon";
 const browser = await chromium.launch({ channel: "chrome", headless: !process.env.HEADED, args: ["--use-gl=angle", "--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 for (let i = 0; i < N; i++) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });

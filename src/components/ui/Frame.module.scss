@@ -7,6 +7,29 @@
   background: radial-gradient(120% 90% at 50% 40%, #f1eee8 0%, var(--paper) 55%, var(--paper-deep) 100%);
 }
 
+// 전시 로딩 배경 사진: 16:10 사진을 전시 카메라와 같은 크기로 가운데에 (평평한 종이색 위)
+.backdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+  pointer-events: none;
+  transition: opacity 0.35s ease 0.5s;
+
+  &.hide {
+    opacity: 0;
+  }
+
+  > * {
+    flex: none;
+    width: min(100vw, 160dvh);
+    @media (max-aspect-ratio: 1/1) {
+      width: 114.3vw;
+    }
+  }
+}
+
 .canvas {
   position: absolute;
   inset: 0;
@@ -38,11 +61,14 @@
     pointer-events: auto;
   }
 
-  // 왼쪽 조작 안내는 좁은 화면에선 링크와 겹치므로 숨긴다
+  // 왼쪽 조작 안내는 좁은 화면에선 링크와 겹치므로 숨긴다 (배지는 오른쪽에 남는다)
   > span {
     color: var(--ink-faint);
     @media (max-width: 640px) {
-      display: none;
+      visibility: hidden;
+      width: 0;
+      overflow: hidden;
+      white-space: nowrap;
     }
   }
 }
@@ -78,7 +104,10 @@
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: center;
+  // 블록(사진) 아래쪽에 — 가운데 두면 블록을 가린다
+  place-items: end center;
+  padding-bottom: 22px;
+  pointer-events: none;
   font-family: var(--font-serif);
   font-style: italic;
   color: var(--ink-faint);

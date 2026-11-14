@@ -12,8 +12,8 @@
     "bake:turtle": "node --experimental-strip-types --no-warnings --import ./scripts/ts-alias.mjs scripts/bake-creature.mts turtle",
     "bake:dolphin": "node --experimental-strip-types --no-warnings --import ./scripts/ts-alias.mjs scripts/bake-creature.mts dolphin",
     "bake:whaleshark": "node --experimental-strip-types --no-warnings --import ./scripts/ts-alias.mjs scripts/bake-creature.mts whaleshark",
+    "posters": "node --experimental-strip-types --no-warnings --import ./scripts/ts-alias.mjs scripts/posters.mts",
     "check:render": "node scripts/visual-check/check.mjs",
-    "check:matrix": "node scripts/visual-check/matrix.mjs",
     "check:shot": "node scripts/visual-check/shot.mjs",
     "check:flow": "node scripts/visual-check/flow.mjs",
     "check:profile": "node scripts/visual-check/profile.mjs",
@@ -30,8 +30,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "sass": "^1.105.1",
-    "three": "^0.186.1",
-    "zustand": "^5.0.15"
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@types/node": "^20",

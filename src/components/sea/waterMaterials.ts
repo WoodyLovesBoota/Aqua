@@ -20,6 +20,9 @@ uniform float uSunUp;    // 해가 떠 있는 정도 (커스틱·빛줄기)
 uniform float uLamp;     // 밤 조명 켜짐
 `;
 
+/** 물 색 (라군 청록 하나로 고정): 얕은 곳 · 깊은 곳 · 모래 위 물빛 */
+const WATER = { shallow: "#8fe6dc", deep: "#149ab4", tint: "#a8f0e6" };
+
 /** 밤 빛 웅덩이 자리 개수: 방갈로 수중등(수면) · 섬 횃불(모래) */
 export const POOL_N = 8;
 export const TORCH_N = 4;
@@ -220,8 +223,8 @@ export class WaterSurfaceMaterial extends THREE.ShaderMaterial {
         uCorner: { value: corner },
         uTop: { value: top },
         uBottom: { value: bottom },
-        uShallow: { value: new THREE.Color("#a8f0e6") },
-        uDeep: { value: new THREE.Color("#27b5c6") },
+        uShallow: { value: new THREE.Color(WATER.shallow) },
+        uDeep: { value: new THREE.Color(WATER.deep) },
         uCamPos: { value: new THREE.Vector3() },
         uPools: { value: zeros(POOL_N) },
         ...ENV,
@@ -280,8 +283,8 @@ export class WaterSideMaterial extends THREE.ShaderMaterial {
       depthWrite: false,
       side: THREE.DoubleSide,
       uniforms: {
-        uShallow: { value: new THREE.Color("#a8f0e6") },
-        uDeep: { value: new THREE.Color("#27b5c6") },
+        uShallow: { value: new THREE.Color(WATER.shallow) },
+        uDeep: { value: new THREE.Color(WATER.deep) },
         uTop: { value: top },
         uBottom: { value: bottom },
         uOpacity: { value: 0.5 },
@@ -367,7 +370,7 @@ export class SandFloorMaterial extends THREE.ShaderMaterial {
       uniforms: {
         uTime: { value: 0 },
         uSand: { value: new THREE.Color("#ecdfc4") },
-        uTint: { value: new THREE.Color("#a8f0e6") },
+        uTint: { value: new THREE.Color(WATER.tint) },
         uTop: { value: top },
         uBottom: { value: bottom },
         uHalf: { value: new THREE.Vector2(halfX, halfZ) },
@@ -463,10 +466,3 @@ export class LightShaftMaterial extends THREE.ShaderMaterial {
     });
   }
 }
-
-export const FLAVOURS: { id: string; label: string; shallow: string; deep: string; tint: string }[] = [
-  { id: "lagoon", label: "Lagoon", shallow: "#8fe6dc", deep: "#149ab4", tint: "#a8f0e6" },
-  { id: "sapphire", label: "Sapphire", shallow: "#5fc8f0", deep: "#1c5fd6", tint: "#5fc8f0" },
-  { id: "lime", label: "Lime", shallow: "#b5ee5a", deep: "#55b02e", tint: "#9ad94a" },
-  { id: "sunset", label: "Sunset", shallow: "#f7a5b5", deep: "#9d4a9c", tint: "#f2a0b0" },
-];

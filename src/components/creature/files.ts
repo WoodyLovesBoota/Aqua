@@ -1,4 +1,4 @@
-import type { Species } from "@/store/species";
+import type { Species } from "@/components/creature/species";
 import { DOLPHIN_FILES } from "@/components/dolphin/dolphinManifest";
 import { MANTA_FILES } from "@/components/manta/mantaManifest";
 import { SHARK_FILES } from "@/components/shark/sharkManifest";

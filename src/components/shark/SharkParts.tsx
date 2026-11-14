@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import * as THREE from "three";
-import type { SharkConfig } from "@/store/sharkStore";
+import type { SharkConfig } from "@/components/creature/species";
 import { BEAD, careTag, DARK, faceAlong, GOLD, glossMat, goldMat, groupMatrix, matteMat, Merged, type Part, PINK, SEAM, SLEEPY, WHITE } from "@/components/creature/parts";
 import { EYE_GUESS, eyeAnchor, gillPoints, headTop, projectToSurface, surface, surfaceAnchor } from "./sharkSdf";
 

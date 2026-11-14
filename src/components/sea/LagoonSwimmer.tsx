@@ -3,7 +3,7 @@
 import { useFrame } from "@react-three/fiber";
 import { memo, useMemo, useRef } from "react";
 import * as THREE from "three";
-import type { CreatureConfig, Species } from "@/store/species";
+import type { CreatureConfig, Species } from "@/components/creature/species";
 import { publishDebug } from "@/components/creature/debugProbe";
 import type { CreatureMotion } from "@/components/creature/motion";
 import { PlushCreature } from "@/components/creature/PlushCreature";

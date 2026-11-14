@@ -1,10 +1,9 @@
 // 조건부 캡처: 페이지 안의 식이 참이 되는 순간 찍는다.
 // usage: COND='window.__aquaDebug?.dolphin.phase==="air"' URL=/sea?jump=5 node probe.mjs out.png  (TIMEOUT=ms, AFTER=ms, EXPR=찍은 뒤 평가해 출력할 식)
-import { BASE, closeAndExit, injectStore, launch } from "./browser.mjs";
+import { BASE, closeAndExit, launch } from "./browser.mjs";
 const out = process.argv[2];
 const browser = await launch();
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: Number(process.env.DPR ?? 1) });
-await injectStore(ctx);
 const page = await ctx.newPage();
 await page.goto(BASE + (process.env.URL ?? "/sea"), { waitUntil: "networkidle" });
 try {

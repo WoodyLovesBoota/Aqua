@@ -4,7 +4,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useContext, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import type { CreatureConfig, Species } from "@/store/species";
+import type { CreatureConfig, Species } from "@/components/creature/species";
 import { compileSpread, ExtraTargets } from "@/components/three/precompile";
 import { loadCreatureGeometry, type CreatureLod } from "./creatureMesh";
 import type { CreatureMotion } from "./motion";

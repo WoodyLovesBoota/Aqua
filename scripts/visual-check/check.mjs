@@ -2,7 +2,7 @@
 // usage: node check.mjs <step> [baseUrl]
 import fs from "node:fs";
 import path from "node:path";
-import { BASE, closeAndExit, injectStore, launch } from "./browser.mjs";
+import { BASE, closeAndExit, launch } from "./browser.mjs";
 
 const step = process.argv[2] ?? "0";
 const base = process.argv[3] ?? BASE;
@@ -72,11 +72,9 @@ await ctx.addInitScript(() => {
   window.addEventListener("error", (e) => S.errors.push(String(e.message)));
 });
 
-// STORE='{"species":"manta"}' 처럼 저장 상태를 넣어 두고 잰다 (스튜디오 종 선택 등)
-await injectStore(ctx);
 
 const result = {};
-const routes = (process.env.ROUTES ?? "/,/sea").split(",");
+const routes = (process.env.ROUTES ?? "/lagoon").split(",");
 for (const route of routes) {
   const page = await ctx.newPage();
   const consoleErr = [];
@@ -136,17 +134,7 @@ for (const route of routes) {
     const h1 = await page.evaluate(() => performance.memory?.usedJSHeapSize ?? 0);
     heapDrift = +((h1 - h0) / 1048576).toFixed(1);
   }
-  const shot = path.join(outDir, (route === "/" ? "studio" : "sea") + ".png");
-  await page.screenshot({ path: shot });
-  if (route === "/") {
-    // 두 번째 포즈: 드래그로 상어를 커서 쪽으로 끌어와 본다
-    await page.mouse.move(700, 450);
-    await page.mouse.down();
-    await page.mouse.move(480, 450, { steps: 12 });
-    await page.mouse.up();
-    await page.waitForTimeout(1200);
-    await page.screenshot({ path: path.join(outDir, "studio-b.png") });
-  }
+  await page.screenshot({ path: path.join(outDir, (route === "/lagoon" ? "sea" : route.replace(/\W+/g, "")) + ".png") });
   result[route] = { canvasAt, firstDrawAt, ...m, heapDriftMB: heapDrift, dpr, console: consoleErr.slice(0, 10) };
   await page.close();
 }

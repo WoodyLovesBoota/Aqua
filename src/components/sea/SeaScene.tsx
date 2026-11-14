@@ -3,10 +3,10 @@
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { ThreeEvent } from "@react-three/fiber";
-import { type RefObject, useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { CreatureConfig, Species } from "@/store/species";
+import { CREATURE_CONFIGS } from "@/components/creature/species";
 import { captureParam, DEBUG_ON, publishDebug } from "@/components/creature/debugProbe";
 import type { CreatureMotion } from "@/components/creature/motion";
 import { PlushCreature } from "@/components/creature/PlushCreature";
@@ -14,7 +14,6 @@ import { asShark } from "@/components/creature/registry";
 import { ExtraTargets, Precompile } from "@/components/three/precompile";
 import { GlBoundary } from "@/components/ui/GlBoundary";
 import {
-  FLAVOURS,
   LightShaftMaterial,
   SandFloorMaterial,
   StrataMaterial,
@@ -37,15 +36,8 @@ import { Shadows } from "./Shadows";
 import { PLANE_FOCUS, PLANE_OFF, Seaplane } from "./Seaplane";
 
 interface Props {
-  creatures: Record<Species, CreatureConfig>;
-  /** 물 색 (waterMaterials.FLAVOURS 의 id) */
-  flavour: string;
-  /** 바다에 풀어 둔 종 — 없는 종은 그리지 않고 서로 피하는 목록에서도 뺀다 */
-  released: readonly Species[];
   /** 셰이더 워밍업이 끝나 첫 프레임을 그릴 준비가 됐을 때 */
   onReady?: () => void;
-  /** 페이지가 사진 찍기 함수를 받아 가는 자리 (현재 화면을 PNG Blob 으로) */
-  snapshot?: RefObject<(() => Promise<Blob | null>) | null>;
 }
 
 // 수조 치수(lagoonNav.TANK): 젤리 블록 같은 둥근 라군
@@ -114,8 +106,8 @@ const SHAFTS = [
   { x: 1.0, z: 3.0, w: 1.2, rot: -0.2 },
 ].map((sh) => ({ ...sh, x: sh.x * S, z: sh.z * S }));
 
-function Scene({ creatures, flavour, released, onReady, snapshot }: Props) {
-  const { camera, gl, scene } = useThree();
+function Scene({ onReady }: Props) {
+  const { camera, gl } = useThree();
   const sharkRoot = useRef<THREE.Group>(null!);
   const shadow = useRef<THREE.Mesh>(null!);
   // 블록 전체 그룹(행렬은 useFrame 이 합성해 직접 쓴다) + 흔들림 상태. 안정된 객체로 두어 LagoonDay 가 하늘 돔(뚜껑)을 이 안에 포털로 넣는다
@@ -134,14 +126,9 @@ function Scene({ creatures, flavour, released, onReady, snapshot }: Props) {
   // 생물 위치 벡터는 씬이 소유하고 각 AI 가 제자리에서 갱신한다 — 서로 피할 때 같은 벡터를 본다
   const positions = useMemo(() => Object.fromEntries(SWIMMERS.map((b) => [b.species, new THREE.Vector3()])) as Record<string, THREE.Vector3>, []);
   const sharkPos = useMemo(() => new THREE.Vector3(1.5, -1.4, 1.5), []);
-  const releasedKey = released.join(",");
-  const hasShark = released.includes("hammerhead");
-  const swimmers = useMemo(() => SWIMMERS.filter((b) => releasedKey.split(",").includes(b.species)), [releasedKey]);
-  // 서로 피하는 목록은 지금 바다에 있는 생물만 (빠진 종의 마지막 자리를 유령처럼 피하지 않게)
-  const sharkAvoid = useMemo(() => swimmers.map((b) => positions[b.species]), [swimmers, positions]);
-  const everyone = useMemo(() => (hasShark ? [sharkPos, ...sharkAvoid] : sharkAvoid), [hasShark, sharkPos, sharkAvoid]);
-  // 새로 풀어 준 생물은 들어온 자리에 첨벙 (첫 마운트의 기본 생물들은 빼고)
-  const seen = useRef<Set<string> | null>(null);
+  // 상어는 씬이 직접 몰고, 나머지는 LagoonSwimmer — 모두 기본으로 바다에 있다. 서로 피하는 목록은 전원
+  const sharkAvoid = useMemo(() => SWIMMERS.map((b) => positions[b.species]), [positions]);
+  const everyone = useMemo(() => [sharkPos, ...sharkAvoid], [sharkPos, sharkAvoid]);
   const ai = useRef<Ai | null>(null);
   if (ai.current == null) {
     ai.current = {
@@ -301,16 +288,6 @@ function Scene({ creatures, flavour, released, onReady, snapshot }: Props) {
     [surfaceMat, sim, simDebugMat, below, sideMat, floorMat, strataMat, shadowTex, shaftMat, shaftGeo, sideGeo, strataGeo, floorGeo, snow],
   );
 
-  // 물 색
-  useEffect(() => {
-    const f = FLAVOURS.find((x) => x.id === flavour) ?? FLAVOURS[0];
-    surfaceMat.uniforms.uShallow.value.set(f.shallow);
-    surfaceMat.uniforms.uDeep.value.set(f.deep);
-    sideMat.uniforms.uShallow.value.set(f.shallow);
-    sideMat.uniforms.uDeep.value.set(f.deep);
-    floorMat.uniforms.uTint.value.set(f.tint);
-  }, [flavour, surfaceMat, sideMat, floorMat]);
-
   useEffect(() => {
     if (CALM_PARAM) sim.setCalm(CALM_PARAM);
   }, [sim]);
@@ -319,46 +296,6 @@ function Scene({ creatures, flavour, released, onReady, snapshot }: Props) {
   const splash = useCallback((x: number, z: number, strength: number) => sim.push(x, z, 0.35 + 0.3 * strength, -0.25 * strength), [sim]);
   /** 활주 항적 등 작은 파임 (반지름·세기를 직접 준다) */
   const wake = useCallback((x: number, z: number, radius: number, strength: number) => sim.push(x, z, radius, strength), [sim]);
-
-  useEffect(() => {
-    const now = new Set(releasedKey.split(",").filter(Boolean));
-    const prev = seen.current;
-    seen.current = now;
-    if (!prev) return;
-    const added = [...now].filter((id) => !prev.has(id));
-    if (!added.length) return;
-    // 한 프레임 뒤 (새 생물이 첫 자리를 잡은 뒤) 그 자리에서 첨벙
-    const id = window.setTimeout(() => {
-      for (const sp of added) {
-        const p = sp === "hammerhead" ? sharkPos : positions[sp];
-        if (p) splash(p.x, p.z, 1.6);
-      }
-    }, 120);
-    return () => window.clearTimeout(id);
-  }, [releasedKey, positions, sharkPos, splash]);
-
-  // 사진: 지금 장면을 한 번 더 그리고 같은 태스크 안에서 캔버스를 떠낸다 (preserveDrawingBuffer 없이도 비지 않는다)
-  useEffect(() => {
-    if (!snapshot) return;
-    snapshot.current = () =>
-      new Promise<Blob | null>((resolve) => {
-        gl.render(scene, camera);
-        // 캔버스는 투명 바탕이라 종이색 위에 얹어 떠낸다 (같은 태스크 안이라 그린 버퍼가 아직 남아 있다)
-        const src = gl.domElement;
-        const out = document.createElement("canvas");
-        out.width = src.width;
-        out.height = src.height;
-        const ctx2d = out.getContext("2d");
-        if (!ctx2d) return resolve(null);
-        ctx2d.fillStyle = "#ebe7e0";
-        ctx2d.fillRect(0, 0, out.width, out.height);
-        ctx2d.drawImage(src, 0, 0);
-        out.toBlob(resolve, "image/png");
-      });
-    return () => {
-      snapshot.current = null;
-    };
-  }, [snapshot, gl, scene, camera]);
 
   useEffect(() => {
     const inst = rocksRef.current;
@@ -548,9 +485,9 @@ function Scene({ creatures, flavour, released, onReady, snapshot }: Props) {
       camera.lookAt(tx, aspect < 1 ? -3.8 : CAM.lookY, tz); // 세로 화면은 아래 패널에 안 가리게 수조를 위로
     }
 
-    // 상어 AI (바다에 없으면 건너뛴다 — 다시 풀어 주면 마지막 자리에서 이어 헤엄친다)
+    // 상어 AI
     const a = ai.current!;
-    if (hasShark) {
+    { // 상어 AI 지역 변수 범위
       const targetSpeed = 1.15;
 
       a.retarget -= dt;
@@ -728,18 +665,18 @@ function Scene({ creatures, flavour, released, onReady, snapshot }: Props) {
       <points geometry={snow} material={snowMat} />
 
       {/* 상어 그림자 */}
-      <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]} visible={hasShark}>
+      <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[1.9, 1.1]} />
         <meshBasicMaterial map={shadowTex} transparent depthWrite={false} />
       </mesh>
 
       {/* 상어 (자율 유영 AI 는 위) */}
       <group ref={sharkRoot} scale={SHARK_SCALE}>
-        {hasShark && <PlushCreature species="hammerhead" config={asShark(creatures.hammerhead)} motion={motion} wet lod="mid" />}
+        <PlushCreature species="hammerhead" config={asShark(CREATURE_CONFIGS.hammerhead)} motion={motion} wet lod="mid" />
       </group>
       {/* 나머지 생물: 공용 조향 + 종별 행동 (수면 스침·호흡·점프·섭식) */}
-      {swimmers.map((b) => (
-        <LagoonSwimmer key={b.species} behaviour={b} config={creatures[b.species]} pos={positions[b.species]} others={everyone} onSplash={splash} />
+      {SWIMMERS.map((b) => (
+        <LagoonSwimmer key={b.species} behaviour={b} config={CREATURE_CONFIGS[b.species]} pos={positions[b.species]} others={everyone} onSplash={splash} />
       ))}
       {/* 산호 군락의 열대어 (1 드로우) */}
       <ReefFish others={everyone} />

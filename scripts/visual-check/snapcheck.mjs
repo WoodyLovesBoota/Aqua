@@ -9,7 +9,7 @@ const ctx = await browser.newContext({ ...contextOptions(), acceptDownloads: tru
 const page = await ctx.newPage();
 const errs = [];
 collectConsoleErrors(page, errs);
-await page.goto(base + "/", { waitUntil: "networkidle" });
+await page.goto(base + "/lagoon", { waitUntil: "networkidle" });
 await page.waitForTimeout(4000);
 const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Snapshot" }).click()]);
 await dl.saveAs(out);

@@ -1,4 +1,4 @@
-// 회귀 게이트: tsc → lint → 렌더 계측(두 라우트) → 조작 흐름(데스크톱·세로) → 소크(수조·스튜디오) → 매트릭스 를 차례로 돌리고 요약한다.
+// 회귀 게이트: tsc → lint → 렌더 계측 → 조작 흐름(데스크톱·세로) → 소크(수조) 를 차례로 돌리고 요약한다.
 // usage: pnpm check:all <라벨> [baseUrl]   (SOAK=초, SKIP=matrix,soak 처럼 생략 가능) → .visual-check/step<라벨>/summary.json, 실패가 있으면 exit 1
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -18,9 +18,7 @@ const steps = [
   { name: "render", cmd: ["node", "scripts/visual-check/check.mjs", label, ...(base ? [base] : [])], env: { DPR: "2" } },
   { name: "flow", cmd: ["node", "scripts/visual-check/flow.mjs", label, ...(base ? [base] : [])] },
   { name: "flow-mobile", cmd: ["node", "scripts/visual-check/flow.mjs", label + "m", ...(base ? [base] : [])], env: { VW: "390", VH: "844", DPR: "2" } },
-  { name: "soak-sea", cmd: ["node", "scripts/visual-check/soak.mjs", ...(base ? [base] : [])], env: { SECS: soakSecs, URL: "/sea" } },
-  { name: "soak-studio", cmd: ["node", "scripts/visual-check/soak.mjs", ...(base ? [base] : [])], env: { SECS: soakSecs, URL: "/" } },
-  { name: "matrix", cmd: ["node", "scripts/visual-check/matrix.mjs", label, ...(base ? [base] : [])] },
+  { name: "soak-sea", cmd: ["node", "scripts/visual-check/soak.mjs", ...(base ? [base] : [])], env: { SECS: soakSecs, URL: "/lagoon" } },
 ];
 
 const summary = {};

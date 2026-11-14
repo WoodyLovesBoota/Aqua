@@ -1,7 +1,8 @@
 import * as THREE from "three";
-import { captureParam } from "@/components/creature/debugProbe";
+import { dayHour } from "@/lib/lagoonClock";
 
 export { ENV, resetEnv } from "@/components/three/sceneEnv";
+export { dayHour };
 
 /**
  * 라군의 하루 — 실제 1시간 = 라군 24시간 (매시 정각이 자정, 30분이 정오).
@@ -9,16 +10,6 @@ export { ENV, resetEnv } from "@/components/three/sceneEnv";
  * 커스텀 셰이더가 같이 참조하는 공용 유니폼(ENV)을 매 프레임 채운다.
  * ?hour=H 로 시각 고정, ?daylen=초 로 하루 길이 덮어쓰기 (점검용).
  */
-
-const HOUR_PARAM = captureParam("hour");
-const FIXED_HOUR = HOUR_PARAM != null && Number.isFinite(Number(HOUR_PARAM)) ? ((Number(HOUR_PARAM) % 24) + 24) % 24 : null;
-const DAY_LEN = Number(captureParam("daylen")) || 3600; // 하루 길이(실제 초)
-
-/** 지금 라군 시각 (0 ~ 24) — 벽시계 기준이라 새로고침·여러 탭에서도 같다 */
-export function dayHour(nowMs = Date.now()) {
-  if (FIXED_HOUR != null) return FIXED_HOUR;
-  return (((nowMs / 1000) % DAY_LEN) / DAY_LEN) * 24;
-}
 
 /** 키프레임: 하늘(위·아래), 해/달 방향광, 반구광, 셰이더 환경광(선형 배율), 별, 조명 켜짐 */
 interface Key {
@@ -168,20 +159,4 @@ export function sampleDay(hour: number, out: DayState) {
   if (ma < 0 || ma > 1) out.moonElev = -Math.abs(out.moonElev) - 0.01;
   out.moonArc = ma;
   return out;
-}
-
-/** 라군 시각 → "HH:MM" */
-export function formatHour(h: number) {
-  const m = Math.floor(h * 60) % (24 * 60);
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-}
-
-/** 시간대 이름 (패널 표시용) */
-export function dayPhase(h: number) {
-  if (h < 5) return "Night";
-  if (h < 6.5) return "Dawn";
-  if (h < 10) return "Morning";
-  if (h < 16) return "Day";
-  if (h < 19) return "Sunset";
-  return "Night";
 }

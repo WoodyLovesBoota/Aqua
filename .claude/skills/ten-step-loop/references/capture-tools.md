@@ -5,23 +5,19 @@
 
 ```bash
 # 한 장 캡처 (기본 /sea). 환경변수로 조절:
-URL="/?pose=1&species=manta&still=1&view=top" DPR=2 WAIT=3500 \
-STORE='{"species":"manta","creatures":{"manta":{"name":"M","furColor":"#35405a","bellyColor":"#e6ebf3"}}}' \
+URL="/?focus=plane&view=top" DPR=2 WAIT=3500 \
   node scripts/visual-check/shot.mjs .visual-check/stepX/top.png
-#   URL: 경로+쿼리 / STORE: localStorage 상태(species·creatures.<종>) 주입 / DPR: 배율 / WAIT: ms
+#   URL: 경로+쿼리 / DPR: 배율 / WAIT: ms
 #   CLICK=x,y AFTER=ms / DRAG=x1,y1,x2,y2[,x3,y3…](지그재그) / HOLD=x,y,ms(누른 채) / HOVER=x1,y1,x2,y2(누르지 않고) : 수조 조작 뒤 캡처
 #   블록 흔들기: DRAG 시작점을 지층 앞면(데스크톱 620,750 / 모바일 150,470)에 두면 잡기. `?shear=x,z` 는 정적 전단(푸딩 변형). 되튐은 `node scripts/visual-check/jelly.mjs` 로 수치 샘플
 #   수면 시뮬 점검: URL="/sea?simdebug=1" 로 높이 텍스처 오버레이(왼쪽 위, 회색 0·파랑 −·흰 +)를 찍고 PIL 로 (28,50)-(518,352) 를 잘라 128 기준 편차를 잰다. `&calm=` 은 감쇠 초기값
 
-# 스튜디오 쿼리: pose=1(고정 포즈) still=1(헤엄 정지) view=top|side|front|back|below lod=mid|lo species=manta|hammerhead
+# 근접 뷰: 스튜디오(꾸미기 화면)는 2026-11-14 에 없앴다. 모델 근접 점검은 전시 안의 ?focus=<id>&view=q|top|side|front|back 뷰로 한다
+#   (기존: focus=sandbar|shore|deep|guests|plane). 새 모델링을 추가하면 같은 규칙의 focus 뷰를 하나 만든다.
 
 # 렌더 계측 (fps·worst·draws·tris·GPU ms·long task·힙·콘솔) → .visual-check/step<라벨>/metrics.json
-ROUTES=/sea pnpm check:render <라벨>
-STORE='{"species":"manta"}' ROUTES=/ pnpm check:render <라벨>s
+pnpm check:render <라벨>          # 기본 ROUTES=/ (전시가 늘면 ROUTES=/,/<slug>)
 #   DPR=2 / DRIFT=30 (힙 드리프트 초) / 프로덕션은 pnpm build && pnpm start -p 3001 뒤 baseUrl 인자, 끝나면 포트로만 kill
-
-# 커스터마이징 매트릭스 (상어 9 + 종별 4 → sheet.png)
-pnpm check:matrix <라벨>
 
 # 조건부 캡처: 페이지 안 식이 참이 되는 순간 찍고 EXPR 결과를 출력 (행동 검증용)
 COND='window.__aquaDebug?.dolphin.phase==="air"' URL="/sea?jump=4" AFTER=250 DPR=2 \
