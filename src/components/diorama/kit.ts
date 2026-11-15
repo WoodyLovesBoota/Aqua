@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /**
  * 디오라마 전시(마리나베이·삿포로…) 공용 모델링 도구.
@@ -201,41 +200,86 @@ export const keepDynamic = <T extends THREE.Object3D>(o: T) => {
 /**
  * 정적 메시를 재질·그림자 설정별로 하나로 합친다 (드로우 콜 수천 → 수십).
  * 지오메트리는 root 기준 좌표로 구워 넣고, 원래 메시는 떼어 낸다. InstancedMesh·Points·Sprite·dynamic 표시 하위는 그대로 둔다.
+ * 합친 버퍼를 한 번에 잡아 정점을 바로 변환해 써넣는다 (메시마다 clone → applyMatrix4 → mergeGeometries 로 두 번 복사하던 것이 로딩 긴 작업의 1/3 이었다).
+ * 남기는 속성은 위치·법선·uv, 정점색 재질이면 color 까지.
  */
 export function bakeStatic(root: THREE.Object3D) {
   root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
-  const buckets = new Map<string, { mat: THREE.Material; cast: boolean; receive: boolean; order: number; geos: THREE.BufferGeometry[] }>();
-  const taken: THREE.Mesh[] = [];
-  const m = new THREE.Matrix4();
+  interface Bucket {
+    mat: THREE.Material;
+    cast: boolean;
+    receive: boolean;
+    order: number;
+    meshes: THREE.Mesh[];
+    verts: number;
+    indices: number;
+  }
+  const buckets = new Map<string, Bucket>();
   const walk = (o: THREE.Object3D) => {
     if (o !== root && o.userData.dynamic) return;
     const mesh = o as THREE.Mesh;
     if (mesh.isMesh && !(o as THREE.InstancedMesh).isInstancedMesh && !Array.isArray(mesh.material)) {
-      const mat = mesh.material as THREE.Material;
+      const mat = mesh.material as THREE.Material, g = mesh.geometry;
       const key = `${mat.uuid}|${mesh.castShadow}|${mesh.receiveShadow}|${mesh.renderOrder}`;
       let b = buckets.get(key);
-      if (!b) buckets.set(key, (b = { mat, cast: mesh.castShadow, receive: mesh.receiveShadow, order: mesh.renderOrder, geos: [] }));
-      const g = mesh.geometry.clone();
-      g.applyMatrix4(m.multiplyMatrices(inv, mesh.matrixWorld));
-      // 합칠 때 속성 모양이 같아야 한다: 위치·법선·uv 만 남긴다 (정점색을 쓰는 재질이면 color 도 — 같은 재질끼리만 합치므로 모두 가진다)
-      const keep = (mat as THREE.MeshStandardMaterial).vertexColors ? ["position", "normal", "uv", "color"] : ["position", "normal", "uv"];
-      for (const name of Object.keys(g.attributes)) if (!keep.includes(name)) g.deleteAttribute(name);
+      if (!b) buckets.set(key, (b = { mat, cast: mesh.castShadow, receive: mesh.receiveShadow, order: mesh.renderOrder, meshes: [], verts: 0, indices: 0 }));
       if (!g.attributes.normal) g.computeVertexNormals();
-      if (!g.attributes.uv) g.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
-      if (!g.index) g.setIndex([...Array(g.attributes.position.count).keys()]);
-      g.morphAttributes = {};
-      b.geos.push(g);
-      taken.push(mesh);
+      b.meshes.push(mesh);
+      b.verts += g.attributes.position.count;
+      b.indices += g.index ? g.index.count : g.attributes.position.count;
     }
     for (const c of o.children) walk(c);
   };
   walk(root);
-  for (const mesh of taken) mesh.removeFromParent();
+  const m = new THREE.Matrix4(), nm = new THREE.Matrix3();
   for (const b of buckets.values()) {
-    const merged = mergeGeometries(b.geos, false);
-    for (const g of b.geos) g.dispose();
-    if (!merged) continue;
+    const withColor = !!(b.mat as THREE.MeshStandardMaterial).vertexColors;
+    const pos = new Float32Array(b.verts * 3), nor = new Float32Array(b.verts * 3), uv = new Float32Array(b.verts * 2);
+    const col = withColor ? new Float32Array(b.verts * 3).fill(1) : null;
+    const idx = b.verts > 65535 ? new Uint32Array(b.indices) : new Uint16Array(b.indices);
+    let v0 = 0, i0 = 0;
+    for (const mesh of b.meshes) {
+      const g = mesh.geometry, P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, C = g.attributes.color, n = P.count;
+      const e = m.multiplyMatrices(inv, mesh.matrixWorld).elements, ne = nm.getNormalMatrix(m).elements;
+      for (let i = 0; i < n; i++) {
+        const x = P.getX(i), y = P.getY(i), z = P.getZ(i), o = (v0 + i) * 3;
+        pos[o] = e[0] * x + e[4] * y + e[8] * z + e[12];
+        pos[o + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+        pos[o + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+        const a = N.getX(i), bb = N.getY(i), c = N.getZ(i);
+        const nx = ne[0] * a + ne[3] * bb + ne[6] * c, ny = ne[1] * a + ne[4] * bb + ne[7] * c, nz = ne[2] * a + ne[5] * bb + ne[8] * c;
+        const l = 1 / (Math.hypot(nx, ny, nz) || 1);
+        nor[o] = nx * l;
+        nor[o + 1] = ny * l;
+        nor[o + 2] = nz * l;
+      }
+      if (U) for (let i = 0, o = v0 * 2; i < n; i++, o += 2) {
+        uv[o] = U.getX(i);
+        uv[o + 1] = U.getY(i);
+      }
+      if (col && C) for (let i = 0, o = v0 * 3; i < n; i++, o += 3) {
+        col[o] = C.getX(i);
+        col[o + 1] = C.getY(i);
+        col[o + 2] = C.getZ(i);
+      }
+      if (g.index) {
+        const src = g.index.array;
+        for (let i = 0; i < src.length; i++) idx[i0 + i] = src[i] + v0;
+        i0 += src.length;
+      } else {
+        for (let i = 0; i < n; i++) idx[i0 + i] = v0 + i;
+        i0 += n;
+      }
+      v0 += n;
+      mesh.removeFromParent();
+    }
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    merged.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+    merged.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    if (col) merged.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    merged.setIndex(new THREE.BufferAttribute(idx, 1));
     const out = new THREE.Mesh(merged, b.mat);
     out.castShadow = b.cast;
     out.receiveShadow = b.receive;

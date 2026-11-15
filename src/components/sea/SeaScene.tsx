@@ -2,6 +2,7 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Quality } from "@/components/three/quality";
 import type { ThreeEvent } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -708,6 +709,7 @@ function Scene({ onReady }: Props) {
           <planeGeometry args={[2, 2]} />
         </mesh>
       )}
+      <Quality />
       <Precompile onReady={onReady} />
     </ExtraTargets.Provider>
   );
@@ -718,7 +720,7 @@ export function SeaScene(props: Props) {
     <GlBoundary onFail={props.onReady}>
       <Canvas
         frameloop="never" // 셰이더 워밍업(Precompile)이 끝나면 always 로 켠다
-        dpr={[1, 1.8]}
+        dpr={[1, 2]} // 실제 배율은 Quality 가 예산 안에서 정한다
         camera={{ fov: CAM.fov, position: [8, 7, 13], near: 1, far: 220 }}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
         style={{ touchAction: "none" }}

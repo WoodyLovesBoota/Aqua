@@ -47,3 +47,12 @@ const JeonjuInner = dynamic(() => import("@/components/jeonju/JeonjuPage"), {
 export function JeonjuClient() {
   return <JeonjuInner />;
 }
+
+const ParisInner = dynamic(() => import("@/components/paris/ParisPage"), {
+  ssr: false,
+  loading: () => <Loading text="Lighting up the tower…" slug="paris" />,
+});
+
+export function ParisClient() {
+  return <ParisInner />;
+}

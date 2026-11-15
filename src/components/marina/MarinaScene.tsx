@@ -1,6 +1,7 @@
 "use client";
 
 import type * as THREE from "three";
+import { trimShadows } from "@/components/diorama/fx";
 import { DioramaScene, type DioramaSpec } from "@/components/diorama/DioramaScene";
 import { buildEsplanade } from "./esplanade";
 import { buildFlyer } from "./flyer";
@@ -35,8 +36,10 @@ const SPEC: DioramaSpec = {
     const flyer = buildFlyer(kit);
     const merlion = buildMerlion(kit);
     const sky = buildSky(kit);
+    const roots = [ground.root, buildSands(kit), buildLotus(kit), flyer.root, buildHelix(kit), buildEsplanade(kit), merlion.root, buildGardens(kit), sky.root];
+    for (const r of roots) trimShadows(r); // 얇거나 아주 작은 메시는 그림자가 보이지 않는다 → 그림자 패스에서 뺀다
     return {
-      roots: [ground.root, buildSands(kit), buildLotus(kit), flyer.root, buildHelix(kit), buildEsplanade(kit), merlion.root, buildGardens(kit), sky.root],
+      roots,
       bakeGroups: [flyer.wheel], // 돌아가는 바퀴 안쪽도 따로 합친다 (돌아가는 그룹 하나 = 몇 드로우)
       ticks: [flyer.tick, merlion.tick, sky.tick],
       water: { material: ground.water.material as THREE.MeshStandardMaterial, y: WATER_Y, contains: inBay },

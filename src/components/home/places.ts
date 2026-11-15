@@ -14,6 +14,7 @@ export const PLACES: Place[] = [
   { slug: "marina-bay", name: "Marina Bay", blurb: "Singapore · blue hour" },
   { slug: "sapporo", name: "Sapporo", blurb: "Hokkaido · snow & onsen" },
   { slug: "jeonju", name: "Jeonju", blurb: "Korea · autumn full moon" },
+  { slug: "paris", name: "Paris", blurb: "France · spring on the Seine" },
 ];
 
 /** 사진 원본 화면비 (1440×900 캡처) — 전시 카메라가 이 비율 이상에선 높이 고정, 미만에선 폭 고정이다 */

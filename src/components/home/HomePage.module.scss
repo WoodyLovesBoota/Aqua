@@ -65,6 +65,8 @@ $ease: cubic-bezier(0.22, 0.8, 0.24, 1);
     transform 0.62s $ease,
     opacity 0.45s ease,
     filter 0.45s ease;
+  // 늘 자기 층에 올려 둔다 — 넘기기·끌기를 시작하는 첫 프레임에 큰 사진을 다시 칠하지 않게 (다섯 장이라 메모리 부담은 작다)
+  will-change: transform;
   outline: none;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
