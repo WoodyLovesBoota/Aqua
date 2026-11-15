@@ -15,8 +15,8 @@ export default function MarinaPage() {
         <MarinaScene onReady={onReady} />
       </CanvasSlot>
       {!ready && <Loading text="Lighting up the bay…" />}
-      <h1 className="srOnly">Aqua — Marina Bay</h1>
-      <TopBar left="Press the bay · grab the block to wobble" />
+      <h1 className="srOnly">Island — Singapore</h1>
+      <TopBar />
     </Frame>
   );
 }

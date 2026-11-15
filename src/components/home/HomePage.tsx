@@ -7,7 +7,7 @@ import { type CSSProperties, type MouseEvent, type PointerEvent, useCallback, us
 import styles from "./HomePage.module.scss";
 import { PLACES, PORTRAIT_ZOOM, POSTER_ASPECT } from "./places";
 import { Poster } from "./Poster";
-import { useLagoonClock, useNight } from "./useLagoonTime";
+import { useNight } from "./useLagoonTime";
 
 const cx = classNames.bind(styles);
 
@@ -15,19 +15,17 @@ const cx = classNames.bind(styles);
 export const LAST_PLACE_KEY = "aqua:place";
 const N = PLACES.length;
 const clampIndex = (i: number) => Math.min(N - 1, Math.max(0, i));
-const pad = (n: number) => String(n).padStart(2, "0");
 const ENTER_MS = 560;
 
 /**
  * 메인 — 전시를 한 곳씩 넘겨 보는 목록. 장면을 실시간으로 그리지 않고 미리 찍은 사진(낮·밤)만 쓴다.
  * 가운데 블록: 올리면 떠오르며 출렁이고 반대 시간대를 엿본다 · 누르면 화면 가득 커지며 전시로 들어간다
  * (전시 로딩 배경이 같은 자리·같은 크기의 사진이라 그대로 실제 장면으로 이어진다).
- * 넘기기: 끌기·스와이프 · 좌우 화살표 키 · 휠 · 옆 블록/아래 이름 누르기.
+ * 화면엔 가운데 블록과 이름만 둔다. 넘기기: 끌기·스와이프 · 좌우 화살표 키 · 휠.
  */
 export default function HomePage() {
   const router = useRouter();
   const night = useNight();
-  const clock = useLagoonClock();
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState<number | null>(null); // 끄는 중이면 칸 단위 오프셋
   const [peek, setPeek] = useState(false);
@@ -149,14 +147,7 @@ export default function HomePage() {
   const place = PLACES[index];
   return (
     <main className={cx("home", { entering, dragging: drag != null })}>
-      <h1 className="srOnly">Aqua — places set in jelly</h1>
-      <div className={cx("topbar")}>
-        <span>Aqua · Jelly dioramas</span>
-        <span className={cx("meta")}>
-          {pad(N)} places{clock && ` · lagoon time ${clock}`}
-        </span>
-      </div>
-
+      <h1 className="srOnly">Island — five places</h1>
       <div ref={stage} className={cx("stage")} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
         {PLACES.map((p, i) => {
           const d = i - index + (drag ?? 0);
@@ -165,7 +156,9 @@ export default function HomePage() {
           const style = {
             "--d": d,
             "--s": 1 - near * 0.42,
-            opacity: entering && !going ? 0 : a <= 1 ? 1 - a * 0.56 : Math.max(0, 0.44 - (a - 1) * 0.44),
+            // 옆 블록은 보이지 않는다 — 넘기는 동안에만 들어오는 쪽이 서서히 드러난다
+            opacity: entering && !going ? 0 : Math.max(0, 1 - a),
+            pointerEvents: current ? undefined : "none",
             filter: `saturate(${1 - near * 0.35})`,
             zIndex: going ? 20 : 10 - Math.round(a),
             ...(going && { transform: entering.transform }),
@@ -181,6 +174,7 @@ export default function HomePage() {
               style={style}
               aria-label={current ? `Step into ${p.name}` : `Show ${p.name}`}
               aria-current={current || undefined}
+              tabIndex={current ? undefined : -1}
               draggable={false}
               onClick={(e) => onItemClick(e, i)}
               onPointerEnter={(e) => current && e.pointerType === "mouse" && setPeek(true)}
@@ -197,33 +191,12 @@ export default function HomePage() {
         })}
       </div>
 
-      <button type="button" className={cx("arrow", "prev")} onClick={() => go(index - 1)} disabled={index === 0} aria-label="Previous place">
-        ←
-      </button>
-      <button type="button" className={cx("arrow", "next")} onClick={() => go(index + 1)} disabled={index === N - 1} aria-label="Next place">
-        →
-      </button>
-
       <div className={cx("caption")} aria-live="polite">
-        <div className={cx("count")}>
-          {pad(index + 1)} / {pad(N)}
-        </div>
         {/* key 로 바뀔 때마다 다시 떠오른다 */}
         <h2 key={place.slug} className={cx("name")}>
           {place.name}
         </h2>
-        <div key={`${place.slug}-b`} className={cx("blurb")}>
-          {place.blurb}
-        </div>
       </div>
-
-      <nav className={cx("index")} aria-label="Places">
-        {PLACES.map((p, i) => (
-          <button key={p.slug} type="button" className={cx({ on: i === index })} onClick={() => go(i)} aria-current={i === index || undefined}>
-            {p.name}
-          </button>
-        ))}
-      </nav>
     </main>
   );
 }

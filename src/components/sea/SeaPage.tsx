@@ -16,8 +16,8 @@ export default function SeaPage() {
         <SeaScene onReady={onReady} />
       </CanvasSlot>
       {!ready && <Loading text="Filling the lagoon…" />}
-      <h1 className="srOnly">Aqua — a plush lagoon</h1>
-      <TopBar left="Press the water · grab the sand to wobble" />
+      <h1 className="srOnly">Island — Maldives</h1>
+      <TopBar />
     </Frame>
   );
 }

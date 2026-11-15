@@ -15,8 +15,8 @@ export default function JeonjuPage() {
         <JeonjuScene onReady={onReady} />
       </CanvasSlot>
       {!ready && <Loading text="Lighting the lanterns…" />}
-      <h1 className="srOnly">Aqua — Jeonju</h1>
-      <TopBar left="Press the stream · grab the block to wobble" />
+      <h1 className="srOnly">Island — Jeonju</h1>
+      <TopBar />
     </Frame>
   );
 }

@@ -15,8 +15,8 @@ export default function SapporoPage() {
         <SapporoScene onReady={onReady} />
       </CanvasSlot>
       {!ready && <Loading text="Letting the snow settle…" />}
-      <h1 className="srOnly">Aqua — Sapporo</h1>
-      <TopBar left="Press the onsen · grab the block to wobble" />
+      <h1 className="srOnly">Island — Sapporo</h1>
+      <TopBar />
     </Frame>
   );
 }

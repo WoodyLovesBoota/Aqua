@@ -40,14 +40,12 @@ export function PosterBackdrop({ slug, hide = false }: { slug: string; hide?: bo
   );
 }
 
-/** 위쪽 안내 줄 — 오른쪽에 링크 배지 (기본: 메인 목록으로) */
-export function TopBar({ left, href = "/", linkLabel = "All places" }: { left: string; href?: string; linkLabel?: string }) {
+/** 왼쪽 위 "← Back" — 메인 목록으로 돌아간다 */
+export function TopBar() {
   return (
     <div className={cx("topbar")}>
-      <span>{left}</span>
-      <Link href={href} className={cx("badge")}>
-        <i />
-        {linkLabel}
+      <Link href="/" className={cx("back")}>
+        ← Back
       </Link>
     </div>
   );

@@ -15,8 +15,8 @@ export default function ParisPage() {
         <ParisScene onReady={onReady} />
       </CanvasSlot>
       {!ready && <Loading text="Lighting up the tower…" />}
-      <h1 className="srOnly">Aqua — Paris</h1>
-      <TopBar left="Press the Seine · grab the block to wobble" />
+      <h1 className="srOnly">Island — Paris</h1>
+      <TopBar />
     </Frame>
   );
 }

@@ -6,15 +6,14 @@ export interface Place {
   /** 라우트(`/<slug>`)이자 사진 파일 이름(`/posters/<slug>-day.webp`, `-night.webp`) */
   slug: string;
   name: string;
-  blurb: string;
 }
 
 export const PLACES: Place[] = [
-  { slug: "lagoon", name: "Lagoon", blurb: "Maldives · resort reef" },
-  { slug: "marina-bay", name: "Marina Bay", blurb: "Singapore · blue hour" },
-  { slug: "sapporo", name: "Sapporo", blurb: "Hokkaido · snow & onsen" },
-  { slug: "jeonju", name: "Jeonju", blurb: "Korea · autumn full moon" },
-  { slug: "paris", name: "Paris", blurb: "France · spring on the Seine" },
+  { slug: "lagoon", name: "Maldives" },
+  { slug: "marina-bay", name: "Singapore" },
+  { slug: "sapporo", name: "Sapporo" },
+  { slug: "jeonju", name: "Jeonju" },
+  { slug: "paris", name: "Paris" },
 ];
 
 /** 사진 원본 화면비 (1440×900 캡처) — 전시 카메라가 이 비율 이상에선 높이 고정, 미만에선 폭 고정이다 */

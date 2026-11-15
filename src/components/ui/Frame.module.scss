@@ -45,58 +45,22 @@
   position: absolute;
   top: 16px;
   left: 24px;
-  right: 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   pointer-events: none;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-
-  a,
-  button {
-    pointer-events: auto;
-  }
-
-  // 왼쪽 조작 안내는 좁은 화면에선 링크와 겹치므로 숨긴다 (배지는 오른쪽에 남는다)
-  > span {
-    color: var(--ink-faint);
-    @media (max-width: 640px) {
-      visibility: hidden;
-      width: 0;
-      overflow: hidden;
-      white-space: nowrap;
-    }
-  }
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid var(--line);
-  background: var(--card);
+.back {
+  pointer-events: auto;
+  display: inline-block;
+  padding: 6px 0;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.2em;
+  font-size: 11px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.15s ease;
+  color: var(--ink-soft);
+  transition: color 0.15s ease;
 
   &:hover {
-    background: var(--ink);
-    color: var(--paper);
-  }
-
-  i {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #2fa36b;
+    color: var(--ink);
   }
 }
 

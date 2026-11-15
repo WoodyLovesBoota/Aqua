@@ -21,8 +21,8 @@ const instrument = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Aqua — Model Showcase", template: "%s — Aqua" },
-  description: "A small showcase of hand-built 3D models to watch and play with.",
+  title: { default: "Island", template: "%s — Island" },
+  description: "Five places rebuilt as jelly-block 3D dioramas.",
 };
 
 export const viewport: Viewport = {
